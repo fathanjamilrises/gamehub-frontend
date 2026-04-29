@@ -12,7 +12,7 @@ const { Invoice } = xenditClient
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { userId, serverId, nickname, gameSlug, gameName, itemLabel, itemPrice } = body
+    const { userId, serverId, nickname, gameSlug, gameName, itemLabel, itemPrice, externalId: providedExternalId } = body
 
     // Validasi input
     if (!userId || !gameSlug || !gameName || !itemLabel || !itemPrice) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const externalId = `GAMEHUB-${gameSlug.toUpperCase()}-${Date.now()}`
+    const externalId = providedExternalId || `GAMEHUB-${gameSlug.toUpperCase()}-${Date.now()}`
     const description = `Top Up ${gameName} — ${itemLabel} (ID: ${userId}${serverId ? ` / Server: ${serverId}` : ''})`
 
     const invoice = await Invoice.createInvoice({

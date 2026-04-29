@@ -302,13 +302,14 @@ export async function POST(req: NextRequest) {
       gameSlug, gameName, gameImage,
       itemLabel, itemPrice,
       xenditInvoiceId, xenditInvoiceUrl,
+      serviceCode, orderCode: providedOrderCode,
     } = body
 
     if (!playerId || !gameSlug || !gameName || !itemLabel || !itemPrice) {
       return Response.json({ success: false, error: 'Data pesanan tidak lengkap' }, { status: 400 })
     }
 
-    const orderCode = `TRX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    const orderCode = providedOrderCode || `TRX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 
     const order = await prisma.orders.create({
       data: {
@@ -325,7 +326,8 @@ export async function POST(req: NextRequest) {
         payment_method: 'Xendit',
         xendit_invoice_id: xenditInvoiceId ?? null,
         xendit_invoice_url: xenditInvoiceUrl ?? null,
-        status: 'processing',
+        service_code: serviceCode ?? null,
+        status: 'pending_payment',
       },
     })
 

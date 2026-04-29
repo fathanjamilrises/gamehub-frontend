@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatRupiah, GameDetail, NominalItem } from '@/lib/api'
 
 interface Props {
@@ -13,10 +13,43 @@ interface PlayerInfo {
   nickname: string
 }
 
+interface VIPService {
+  code: string
+  name: string
+  price: number
+  normal_price: number
+  basic?: number
+  premium?: number
+  special?: number
+}
+
+// ML Region mapping berdasarkan SKU
+const mlRegionMap: Record<string, string> = {
+  'ml-singapore': 'MLSG',
+  'ml-brazil': 'MLBR',
+  'ml-global': 'MLGLOBAL',
+  'ml-malaysia': 'MLMY',
+  'ml-philippines': 'MLPH',
+  'ml-russia': 'MLRU',
+  'ml-mena': 'MLMENA',
+  'ml-turkey': 'MLTR',
+  'ml-usa': 'MLUS',
+  'ml-asia': 'MLA',
+  'mobile-legends': 'ML', // Default ML
+}
+
 export default function TopUpClient({ game }: Props) {
   const [userId, setUserId] = useState('')
   const [serverId, setServerId] = useState('')
   const [selectedNominal, setSelectedNominal] = useState<NominalItem | null>(null)
+  
+  // VIP Reseller services
+  const [services, setServices] = useState<VIPService[]>([])
+  const [servicesLoading, setServicesLoading] = useState(true)
+  const [servicesError, setServicesError] = useState('')
+  
+  // Region selection for ML variants
+  const [selectedRegion, setSelectedRegion] = useState<string>(mlRegionMap[game.slug] || 'ML')
 
   // Popup states
   const [showConfirm, setShowConfirm] = useState(false)
@@ -35,6 +68,49 @@ export default function TopUpClient({ game }: Props) {
 
   // Mobile Legends perlu server ID
   const isMobileLegends = game.slug === 'mobile-legends'
+
+  // Region options for ML games
+  const regionOptions = [
+    { value: 'ML', label: 'Mobile Legends (Default)' },
+    { value: 'MLSG', label: '🇸🇬 Singapore' },
+    { value: 'MLBR', label: '🇧🇷 Brazil' },
+    { value: 'MLGLOBAL', label: '🌍 Global' },
+    { value: 'MLMY', label: '🇲🇾 Malaysia' },
+    { value: 'MLPH', label: '🇵🇭 Philippines' },
+    { value: 'MLRU', label: '🇷🇺 Russia' },
+    { value: 'MLMENA', label: '🇸🇦 MENA' },
+    { value: 'MLTR', label: '🇹🇷 Turkey' },
+    { value: 'MLUS', label: '🇺🇸 USA' },
+    { value: 'MLA', label: '🌏 Asia' },
+  ]
+
+  // Fetch services from VIP Reseller
+  useEffect(() => {
+    const fetchServices = async () => {
+      setServicesLoading(true)
+      setServicesError('')
+      try {
+        const params = new URLSearchParams()
+        params.append('game', encodeURIComponent(game.slug))
+        if (selectedRegion) {
+          params.append('region', selectedRegion)
+        }
+        const res = await fetch(`/api/vip-services?${params}`)
+        const data = await res.json()
+        if (data.success) {
+          setServices(data.data)
+        } else {
+          setServicesError(data.error || 'Gagal memuat layanan')
+        }
+      } catch {
+        setServicesError('Gagal memuat layanan')
+      } finally {
+        setServicesLoading(false)
+      }
+    }
+
+    fetchServices()
+  }, [game.slug, selectedRegion])
 
   const total = useMemo(() => (selectedNominal ? selectedNominal.price : 0), [selectedNominal])
   const canCheckout = isMobileLegends
@@ -60,16 +136,20 @@ export default function TopUpClient({ game }: Props) {
       })
       const data = await res.json()
       console.log('[check-player] response:', JSON.stringify(data))
-      if (data.success) {
-        setPlayerInfo(data.data)
-      } else {
+
+      if (!data.success) {
         const debugInfo = data.debug ? ` | Debug: ${JSON.stringify(data.debug)}` : ''
         console.warn('[check-player] error:', data.error, data.debug ?? '')
         setCheckError((data.error || 'Gagal mengecek data pemain') + debugInfo)
+        setCheckingPlayer(false)
+        return
       }
+
+      // Direct response from VIP Reseller API
+      setPlayerInfo(data.data)
+      setCheckingPlayer(false)
     } catch {
       setCheckError('Terjadi kesalahan. Silakan coba lagi.')
-    } finally {
       setCheckingPlayer(false)
     }
   }
@@ -80,6 +160,29 @@ export default function TopUpClient({ game }: Props) {
     setPaymentError('')
 
     try {
+      // 1. Cek stock dulu (skip kalau API tidak support)
+      let stockAvailable = true
+      try {
+        const stockRes = await fetch(`/api/vip-stock?service=${selectedNominal.id}`)
+        const stockData = await stockRes.json()
+        
+        // Skip kalau layanan tidak support cek stock
+        if (stockData.error?.includes('tidak support') || stockData.error?.includes('not support')) {
+          console.log('[stock-check] Skipped - not supported for this service')
+        } else if (!stockData.success || !stockData.data?.available) {
+          setPaymentError(stockData.error || 'Stok tidak tersedia / habis')
+          setCreatingPayment(false)
+          return
+        }
+      } catch {
+        // Skip kalau error
+        console.log('[stock-check] Skipped due to error')
+      }
+
+      // 2. Generate order code dulu untuk matching dengan webhook
+      const orderCode = `TRX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+
+      // 3. Buat Xendit payment dengan external_id = orderCode
       const res = await fetch('/api/payment/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,16 +194,17 @@ export default function TopUpClient({ game }: Props) {
           gameName: game.name,
           itemLabel: selectedNominal.label,
           itemPrice: selectedNominal.price,
+          externalId: orderCode, // untuk matching webhook
         }),
       })
       const data = await res.json()
+      
       if (data.success) {
         setPaymentUrl(data.data.invoiceUrl)
 
-        // 1. Simpan order ke DB → dapat orderCode
-        let orderCode: string | null = null
+        // 4. Simpan order ke DB dengan order_code yang sama (status pending, VIP order nanti setelah bayar)
         try {
-          const orderRes = await fetch('/api/orders', {
+          await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -115,43 +219,15 @@ export default function TopUpClient({ game }: Props) {
               itemPrice: selectedNominal!.price,
               xenditInvoiceId: data.data.invoiceId,
               xenditInvoiceUrl: data.data.invoiceUrl,
+              serviceCode: selectedNominal!.id,
+              orderCode, // kirim ke API supaya pakai order_code yang sama
             }),
           })
-          const orderData = await orderRes.json()
-          if (orderData.success) orderCode = orderData.data.orderCode
         } catch { /* silent */ }
 
-        // 2. Digiflazz topup — hanya untuk ML, gunakan nominalId dari DB
-        if (game.slug === 'mobile-legends') {
-          setDigiStatus('processing')
-          fetch('/api/digiflazz/topup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              playerId: playerInfo!.userId,
-              serverId: playerInfo!.serverId,
-              nominalId: selectedNominal!.id,
-              orderCode,
-            }),
-          })
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.status === 'Sukses') {
-                setDigiStatus('success')
-                setDigiMessage(d.message ?? 'Diamond berhasil masuk!')
-              } else if (d.status === 'Pending') {
-                setDigiStatus('pending')
-                setDigiMessage(d.message ?? 'Transaksi sedang diproses')
-              } else {
-                setDigiStatus('failed')
-                setDigiMessage(d.message ?? d.error ?? 'Transaksi gagal')
-              }
-            })
-            .catch(() => {
-              setDigiStatus('failed')
-              setDigiMessage('Gagal menghubungi server top up')
-            })
-        }
+        // 4. VIP order akan otomatis diproses setelah pembayaran via webhook Xendit
+        setDigiStatus('pending')
+        setDigiMessage('Menunggu pembayaran... Setelah bayar, diamond akan otomatis dikirim.')
       } else {
         setPaymentError(data.error || 'Gagal membuat link pembayaran')
       }
@@ -230,25 +306,62 @@ export default function TopUpClient({ game }: Props) {
             <h2 className="text-lg font-bold text-gray-900">Pilih Nominal</h2>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {game.nominals.map((nominal) => (
-              <button
-                key={nominal.id}
-                onClick={() => setSelectedNominal(nominal)}
-                className={`border-2 rounded-xl p-4 text-left transition-all ${
-                  selectedNominal?.id === nominal.id
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-200 bg-white hover:border-blue-300'
-                }`}
-              >
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{nominal.label}</p>
-                <p className="font-bold text-gray-900 text-base">{formatRupiah(nominal.price)}</p>
-                {nominal.bonus && (
-                  <p className="text-blue-600 text-xs font-semibold mt-1">{nominal.bonus}</p>
-                )}
-              </button>
-            ))}
+          {/* Region Selector untuk ML */}
+          <div className="mb-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Region / Server</label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              {regionOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {servicesLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
+            </div>
+          )}
+          
+          {servicesError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {servicesError}
+            </div>
+          )}
+          
+          {!servicesLoading && !servicesError && (
+            <div className="grid grid-cols-3 gap-3">
+              {services.map((svc) => (
+                <button
+                  key={svc.code}
+                  onClick={() => setSelectedNominal({
+                    id: svc.code,
+                    label: svc.name,
+                    price: svc.price,
+                    bonus: undefined,
+                  } as NominalItem)}
+                  className={`border-2 rounded-xl p-4 text-left transition-all ${
+                    selectedNominal?.id === svc.code
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{svc.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-gray-900 text-base">{formatRupiah(svc.price)}</p>
+                    {svc.normal_price > svc.price && (
+                      <p className="text-gray-400 text-sm line-through">{formatRupiah(svc.normal_price)}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

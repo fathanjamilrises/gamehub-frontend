@@ -70,6 +70,9 @@ model orders {
   xendit_invoice_url String?  @db.VarChar(500)
   digiflazz_ref      String?  @db.VarChar(100)
   digiflazz_status   String?  @db.VarChar(50)
+  vip_reseller_ref   String?  @db.VarChar(100)
+  vip_reseller_status String? @db.VarChar(50)
+  service_code       String?  @db.VarChar(100)
   status             String   @default("pending") @db.VarChar(50)
   processed_at       DateTime?
   created_at      DateTime @default(now()) @db.DateTime(0)
@@ -90,4 +93,40 @@ model refresh_tokens {
 
   @@index([user_id], map: "refresh_tokens_user_id")
   @@index([token], map: "refresh_tokens_token")
+}
+
+model game_player_cache {
+  id         Int      @id @default(autoincrement())
+  game_slug  String   @db.VarChar(100)
+  user_id    String   @db.VarChar(100)
+  server_id  String?  @db.VarChar(100)
+  nickname   String   @db.VarChar(100)
+  // Region fields from VIP Reseller
+  region_code   String?  @db.VarChar(50)   // e.g., "ID", "SG", "BR"
+  region_name   String?  @db.VarChar(100)  // e.g., "Indonesia", "Singapore"
+  region_zone   String?  @db.VarChar(50)   // zone/area code
+  country       String?  @db.VarChar(100)   // country name
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@unique([game_slug, user_id, server_id], map: "game_user_server_unique")
+  @@index([game_slug], map: "cache_game_slug")
+  @@index([user_id], map: "cache_user_id")
+  @@index([region_code], map: "cache_region_code")
+}
+
+model vip_services {
+  id           Int      @id @default(autoincrement())
+  game_slug    String   @db.VarChar(100)
+  service_code String   @db.VarChar(100)
+  name         String   @db.VarChar(255)
+  price        Int      // VIP price (our selling price)
+  normal_price Int      @default(0) // Original price for strikethrough
+  basic        Int?
+  premium      Int?
+  special      Int?
+  updated_at   DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@unique([game_slug, service_code], map: "game_service_unique")
+  @@index([game_slug], map: "vip_game_slug")
 }
