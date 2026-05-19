@@ -1,0 +1,31 @@
+import type { Metadata } from 'next'
+import './globals.css'
+import { AuthProvider } from '@/lib/hooks/useAuth'
+import Providers from '@/components/providers/Providers'
+
+export const metadata: Metadata = {
+  title: 'GameHub.ID — Top Up & Upgrade Game Favoritmu',
+  description: 'Top up, beli akun, & jasa joki game terpercaya #1 di Indonesia. Proses cepat 24/7.',
+}
+
+import CartDrawer from '@/components/ui/CartDrawer'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="id">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      </head>
+      <body style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+        <Providers>
+          <AuthProvider>
+            {children}
+            <CartDrawer />
+          </AuthProvider>
+        </Providers>
+      </body>
+    </html>
+  )
+}
