@@ -1,166 +1,117 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
-import { useSession } from 'next-auth/react'
-
-interface User {
-  id: string
-  email: string
-  name?: string
-}
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import {
+  apiLogin,
+  apiRegister,
+  apiLogout,
+  apiGetProfile,
+  getStoredUser,
+  getToken,
+  isLoggedOutFlag,
+  clearLoggedOutFlag,
+  AuthUser,
+} from '@/lib/authApi'
 
 interface AuthContextType {
-  user: User | null
+  user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  register: (email: string, password: string, name: string, confirmPassword: string) => Promise<{ success: boolean; error?: string }>
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    confirmPassword: string,
+  ) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
-  refreshToken: () => Promise<boolean>
   checkAuth: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const { data: session, status: sessionStatus } = useSession()
-  const initDone = useRef(false)
 
-  // Sync NextAuth Google session into user state
   useEffect(() => {
-    if (sessionStatus === 'loading') return
-    if (session?.user) {
-      setUser({
-        id: session.user.id ?? '',
-        email: session.user.email ?? '',
-        name: session.user.name ?? '',
-      })
-      setIsLoading(false)
-      initDone.current = true
-    } else if (!initDone.current) {
-      checkAuth()
-    }
-  }, [session, sessionStatus])
-
-  const fetchProfile = async (): Promise<User | null> => {
-    const res = await fetch('/api/auth', {
-      method: 'GET',
-      credentials: 'include',
-    })
-    if (res.ok) {
-      const data = await res.json()
-      if (data.success && data.data?.user) return data.data.user
-    }
-    return null
-  }
+    void checkAuth()
+  }, [])
 
   const checkAuth = async () => {
     try {
-      const profile = await fetchProfile()
-      if (profile) {
-        setUser(profile)
-        initDone.current = true
+      // Jika user sudah klik logout, jangan coba re-authenticate dari cookies
+      if (isLoggedOutFlag()) {
+        console.log('[useAuth] Logout flag detected, skipping re-auth')
+        setUser(null)
+        setIsLoading(false)
         return
       }
-      // access token missing/expired — try refresh once
-      const refreshed = await attemptRefresh()
-      if (refreshed) {
-        const profile2 = await fetchProfile()
-        setUser(profile2)
-        if (profile2) initDone.current = true
-      } else {
+
+      const stored = getStoredUser()
+      const token = getToken()
+
+      // Jika ada data user di localStorage, pakai dulu agar UI tidak kedip (optimistic)
+      if (stored) {
+        setUser(stored)
+      }
+
+      // Selalu coba fetch profil terbaru (ini akan mengirim cookies backend)
+      const profileResult = await apiGetProfile()
+
+      if (profileResult.success && profileResult.user) {
+        setUser(profileResult.user)
+      } else if (!token) {
+        // Jika fetch profil gagal dan tidak ada token di localStorage, 
+        // berarti memang tidak ada session aktif.
         setUser(null)
       }
     } catch (error) {
       console.error('Check auth error:', error)
-      setUser(null)
+      // Jangan langsung null-kan jika error network, biarkan stored user tetap ada jika tersedia
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Internal refresh — does NOT call checkAuth to avoid loops
-  const attemptRefresh = async (): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action: 'refresh' }),
-      })
-      return res.ok
-    } catch {
-      return false
+  const login = async (emailOrUsername: string, password: string) => {
+    clearLoggedOutFlag() // Hapus flag logout agar checkAuth bisa berjalan normal
+    const result = await apiLogin(emailOrUsername, password)
+    if (result.success && result.user) {
+      setUser(result.user)
+      return { success: true }
     }
+    return { success: false, error: result.error || 'Login gagal' }
   }
 
-  const login = async (email: string, password: string) => {
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action: 'login', email, password }),
-      })
-
-      const data = await res.json()
-
-      if (data.success) {
-        setUser(data.data.user)
-        return { success: true }
-      } else {
-        return { success: false, error: data.error }
-      }
-    } catch (error) {
-      console.error('Login error:', error)
-      return { success: false, error: 'Terjadi kesalahan' }
+  const register = async (
+    email: string,
+    password: string,
+    name: string,
+    confirmPassword: string,
+  ) => {
+    if (password !== confirmPassword) {
+      return { success: false, error: 'Konfirmasi password tidak cocok' }
     }
-  }
-
-  const register = async (email: string, password: string, name: string, confirmPassword: string) => {
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', email, password, name, confirmPassword }),
-      })
-
-      const data = await res.json()
-
-      if (data.success) {
-        return { success: true }
+    // `name` dipakai sebagai username untuk backend
+    const result = await apiRegister(name, email, password)
+    if (result.success) {
+      if (result.user) {
+        setUser(result.user)
       } else {
-        return { success: false, error: data.error }
+        // Backend mungkin tidak auto-login
+        const loginRes = await apiLogin(email, password)
+        if (loginRes.success && loginRes.user) setUser(loginRes.user)
       }
-    } catch (error) {
-      console.error('Register error:', error)
-      return { success: false, error: 'Terjadi kesalahan' }
+      return { success: true }
     }
+    return { success: false, error: result.error || 'Registrasi gagal' }
   }
 
   const logout = async () => {
-    try {
-      await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action: 'logout' }),
-      })
-      setUser(null)
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-
-  const refreshToken = async (): Promise<boolean> => {
-    const ok = await attemptRefresh()
-    if (ok) {
-      const profile = await fetchProfile()
-      setUser(profile)
-    }
-    return ok
+    await apiLogout()
+    setUser(null)
+    window.location.href = '/'
   }
 
   return (
@@ -172,7 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
-        refreshToken,
         checkAuth,
       }}
     >

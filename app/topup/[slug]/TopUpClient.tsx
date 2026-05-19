@@ -1,7 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { formatRupiah, GameDetail, NominalItem } from '@/lib/api'
+import { useMemo, useState, useEffect } from 'react'
+import { formatRupiah, GameDetail, NominalItem } from '@/lib/types'
+import { getToken, authFetch } from '@/lib/authApi'
+import { savePendingPaymentRedirect, saveReceiptSnapshot, mapReceiptSnapshotFromOrder } from '@/lib/paymentReceipt'
+import Link from 'next/link'
+import Image from 'next/image'
+import { useToast } from '@/lib/contexts/ToastContext'
+import { useCart } from '@/lib/contexts/CartContext'
 
 interface Props {
   game: GameDetail
@@ -11,145 +17,371 @@ interface PlayerInfo {
   userId: string
   serverId: string | null
   nickname: string
+  region?: string
 }
 
-interface VIPService {
-  code: string
-  name: string
-  price: number
-  normal_price: number
-  basic?: number
-  premium?: number
-  special?: number
+interface RawProductItem {
+  id?: string | number
+  nama_produk?: string
+  harga_produk?: string | number
+  harga_normal_produk?: string | number
+  label_produk?: string
+  gambar_produk?: string
+  kode_produk?: string
 }
 
-// ML Region mapping berdasarkan SKU
-const mlRegionMap: Record<string, string> = {
-  'ml-singapore': 'MLSG',
-  'ml-brazil': 'MLBR',
-  'ml-global': 'MLGLOBAL',
-  'ml-malaysia': 'MLMY',
-  'ml-philippines': 'MLPH',
-  'ml-russia': 'MLRU',
-  'ml-mena': 'MLMENA',
-  'ml-turkey': 'MLTR',
-  'ml-usa': 'MLUS',
-  'ml-asia': 'MLA',
-  'mobile-legends': 'ML', // Default ML
+interface RawProductGroup {
+  label?: string
+  produks?: RawProductItem[]
+}
+
+const PRODUCT_IMAGE_BASE = process.env.NEXT_PUBLIC_API_URL
+
+function normalizeProductLabel(label: unknown): string {
+  return typeof label === 'string' ? label.trim().toLowerCase() : ''
+}
+
+function getProductBonus(label: unknown): string | undefined {
+  if (typeof label !== 'string') return undefined
+
+  const normalizedLabel = normalizeProductLabel(label)
+  if (
+    !normalizedLabel ||
+    normalizedLabel === 'diamond' ||
+    normalizedLabel === 'wdp' ||
+    normalizedLabel.includes('weekly diamond pass')
+  ) {
+    return undefined
+  }
+
+  return label.trim()
+}
+
+function resolveProductImage(image: unknown): string | undefined {
+  if (typeof image !== 'string') return undefined
+
+  const trimmedImage = image.trim()
+  if (!trimmedImage) return undefined
+
+  if (
+    /^https?:\/\//i.test(trimmedImage) ||
+    trimmedImage.startsWith('data:') ||
+    trimmedImage.startsWith('blob:')
+  ) {
+    return trimmedImage
+  }
+
+  if (trimmedImage.startsWith('//')) {
+    return 'https:' + trimmedImage
+  }
+
+  const normalizedPath = trimmedImage.startsWith('/') ? trimmedImage : '/' + trimmedImage
+  return PRODUCT_IMAGE_BASE + normalizedPath
+}
+
+function getProductBadgeText(label: string): string {
+  const compactLabel = label.trim()
+  const wordMatch = compactLabel.match(/[A-Za-z0-9]+/g) ?? []
+
+  if (wordMatch.length >= 2) {
+    return (wordMatch[0]?.charAt(0) ?? '') + (wordMatch[1]?.charAt(0) ?? '').toUpperCase()
+  }
+
+  return compactLabel.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase() || 'TOP'
+}
+
+function parseProductNumber(value: string | number | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value !== 'string') return 0
+
+  const digitsOnly = value.replace(/[^\d]/g, '')
+  return digitsOnly ? parseInt(digitsOnly, 10) : 0
+}
+
+function mapProductGroup(group: RawProductGroup) {
+  return {
+    label: group.label || 'Kategori',
+    produks: (group.produks || []).map((raw, idx): NominalItem => {
+      const parsedPrice = parseProductNumber(raw.harga_produk)
+      const parsedNormalPrice = parseProductNumber(raw.harga_normal_produk)
+
+      return {
+        id: String(raw.id || raw.kode_produk || `item-${idx}`) + `-${idx}`,
+        label: raw.nama_produk || 'Item',
+        amount: parsedPrice,
+        price: parsedPrice,
+        originalPrice: parsedNormalPrice > 0 ? parsedNormalPrice : undefined,
+        bonus: getProductBonus(raw.label_produk),
+        image: resolveProductImage(raw.gambar_produk),
+        code: raw.kode_produk,
+      }
+    }),
+  }
+}
+
+function normalizeToGroups(data: any): { label: string; produks: NominalItem[] }[] {
+  if (!Array.isArray(data)) return []
+  
+  // Jika item pertama sudah punya properti 'produks', berarti sudah dikelompokkan oleh backend
+  if (data.length > 0 && Array.isArray(data[0].produks)) {
+    return data.map(mapProductGroup)
+  }
+  
+  // Jika flat array, kelompokkan berdasarkan label_produk (kategori)
+  const groupsMap: Record<string, RawProductItem[]> = {}
+  data.forEach((p: any) => {
+    const label = p.label_produk || 'Umum'
+    if (!groupsMap[label]) groupsMap[label] = []
+    groupsMap[label].push(p)
+  })
+  
+  return Object.entries(groupsMap).map(([label, produks]) => 
+    mapProductGroup({ label, produks })
+  )
+}
+
+function extractProducts(data: any): any[] {
+  const payload = data?.data ?? data
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.produks)) return payload.produks
+  if (payload && Array.isArray(payload.data)) return payload.data
+  return []
 }
 
 export default function TopUpClient({ game }: Props) {
+  const { success: showSuccess, error: showError, toast } = useToast()
+  const { addToCart } = useCart()
+  const [addingToCart, setAddingToCart] = useState(false)
   const [userId, setUserId] = useState('')
   const [serverId, setServerId] = useState('')
   const [selectedNominal, setSelectedNominal] = useState<NominalItem | null>(null)
-  
-  // VIP Reseller services
-  const [services, setServices] = useState<VIPService[]>([])
-  const [servicesLoading, setServicesLoading] = useState(true)
-  const [servicesError, setServicesError] = useState('')
-  
-  // Region selection for ML variants
-  const [selectedRegion, setSelectedRegion] = useState<string>(mlRegionMap[game.slug] || 'ML')
 
-  // Popup states
+  const handleAddToCart = async () => {
+    if (!canCheckout || !selectedNominal) return
+    
+    let idListing = parseInt(selectedNominal.code || '')
+    if (isNaN(idListing)) {
+      idListing = parseInt(selectedNominal.id.split('-')[0])
+    }
+    
+    if (isNaN(idListing)) {
+      toast('Item tidak valid untuk dimasukkan ke keranjang', 'error')
+      return
+    }
+
+    setAddingToCart(true)
+    try {
+      const catatan = userId ? `UserID: ${userId}${serverId ? `, Server: ${serverId}` : ''}` : ''
+      await addToCart({
+        item_type: 'topup',
+        id_produk: idListing,
+        topup_target_id: userId || 'unknown',
+        topup_target_server: serverId || '',
+        quantity: 1,
+        catatan: catatan
+      })
+    } catch (err) {
+      // Error handled by CartContext
+    } finally {
+      setAddingToCart(false)
+    }
+  }
+
+  const [dynamicNominals, setDynamicNominals] = useState<{ label: string; produks: NominalItem[] }[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true)
+  const [imageLoadErrors, setImageLoadErrors] = useState<Record<string, boolean>>({})
+
+  const [isAutoChecking, setIsAutoChecking] = useState(false)
+  const [autoNickname, setAutoNickname] = useState('')
+  const [autoRegion, setAutoRegion] = useState('')
+
   const [showConfirm, setShowConfirm] = useState(false)
   const [checkingPlayer, setCheckingPlayer] = useState(false)
   const [playerInfo, setPlayerInfo] = useState<PlayerInfo | null>(null)
   const [checkError, setCheckError] = useState('')
 
-  // Payment states
   const [creatingPayment, setCreatingPayment] = useState(false)
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
-  const [paymentError, setPaymentError] = useState('')
+  const [orderCreated, setOrderCreated] = useState(false)
+  const [orderCode, setOrderCode] = useState<string | null>(null)
 
-  // Digiflazz topup status (ML only)
-  const [digiStatus, setDigiStatus] = useState<'idle' | 'processing' | 'success' | 'failed' | 'pending'>('idle')
-  const [digiMessage, setDigiMessage] = useState('')
+  // Konfigurasi per game (terpusat)
+  const gameConfig = useMemo(() => {
+    const configs: Record<string, { needsServerId: boolean; maxLength: number; placeholder: string; minLength: number }> = {
+      'mobile-legends': { needsServerId: true, maxLength: 12, placeholder: 'Contoh: 123456789', minLength: 5 },
+      'genshin-impact': { needsServerId: true, maxLength: 10, placeholder: 'Contoh: 812345678', minLength: 9 },
+      'free-fire': { needsServerId: false, maxLength: 12, placeholder: 'Contoh: 123456789', minLength: 5 },
+      'pubg-mobile': { needsServerId: false, maxLength: 15, placeholder: 'Contoh: 51234567890', minLength: 11 },
+      'pubg': { needsServerId: false, maxLength: 15, placeholder: 'Contoh: 51234567890', minLength: 11 },
+      'honkai-star-rail': { needsServerId: true, maxLength: 10, placeholder: 'Contoh: 812345678', minLength: 9 },
+      'valorant': { needsServerId: false, maxLength: 20, placeholder: 'Contoh: Riot ID', minLength: 3 },
+    }
+    return configs[game.slug] || { needsServerId: false, maxLength: 15, placeholder: 'Contoh: 123456789', minLength: 3 }
+  }, [game.slug])
 
-  // Mobile Legends perlu server ID
-  const isMobileLegends = game.slug === 'mobile-legends'
+  const needsServerId = gameConfig.needsServerId
+  // Semua game mendukung nickname check — jika endpoint tidak ada, akan di-handle gracefully
+  const supportsNicknameCheck = true
 
-  // Region options for ML games
-  const regionOptions = [
-    { value: 'ML', label: 'Mobile Legends (Default)' },
-    { value: 'MLSG', label: '🇸🇬 Singapore' },
-    { value: 'MLBR', label: '🇧🇷 Brazil' },
-    { value: 'MLGLOBAL', label: '🌍 Global' },
-    { value: 'MLMY', label: '🇲🇾 Malaysia' },
-    { value: 'MLPH', label: '🇵🇭 Philippines' },
-    { value: 'MLRU', label: '🇷🇺 Russia' },
-    { value: 'MLMENA', label: '🇸🇦 MENA' },
-    { value: 'MLTR', label: '🇹🇷 Turkey' },
-    { value: 'MLUS', label: '🇺🇸 USA' },
-    { value: 'MLA', label: '🌏 Asia' },
-  ]
-
-  // Fetch services from VIP Reseller
   useEffect(() => {
-    const fetchServices = async () => {
-      setServicesLoading(true)
-      setServicesError('')
+    let isMounted = true
+    const fetchGlobalProducts = async () => {
+      setIsLoadingProducts(true)
       try {
-        const params = new URLSearchParams()
-        params.append('game', encodeURIComponent(game.slug))
-        if (selectedRegion) {
-          params.append('region', selectedRegion)
+        const res = await fetch(`/api-proxy/games/${game.slug}?region=global`, { credentials: 'include' })
+        const data = await res.json().catch(() => ({ success: false }))
+
+        if (isMounted) {
+          if (res.ok && data.success) {
+            const products = extractProducts(data)
+            const grouped = normalizeToGroups(products)
+            setDynamicNominals(grouped)
+          } else {
+            setDynamicNominals([])
+          }
         }
-        const res = await fetch(`/api/vip-services?${params}`)
-        const data = await res.json()
-        if (data.success) {
-          setServices(data.data)
-        } else {
-          setServicesError(data.error || 'Gagal memuat layanan')
-        }
-      } catch {
-        setServicesError('Gagal memuat layanan')
+      } catch (err) {
+        console.error('Initial product fetch error:', err)
+        if (isMounted) setDynamicNominals([])
       } finally {
-        setServicesLoading(false)
+        if (isMounted) setIsLoadingProducts(false)
       }
     }
 
-    fetchServices()
-  }, [game.slug, selectedRegion])
+    fetchGlobalProducts()
+    return () => { isMounted = false }
+  }, [game.slug])
 
-  const total = useMemo(() => (selectedNominal ? selectedNominal.price : 0), [selectedNominal])
-  const canCheckout = isMobileLegends
-    ? Boolean(userId.trim()) && Boolean(serverId.trim()) && Boolean(selectedNominal)
-    : Boolean(userId.trim()) && Boolean(selectedNominal)
+  useEffect(() => {
+    if (!userId || (needsServerId && !serverId)) {
+      setAutoNickname('')
+      setAutoRegion('')
+      setCheckError('')
+      return
+    }
+
+    // Cek apakah user ID memenuhi panjang minimum
+    if (userId.length < gameConfig.minLength) {
+      setAutoNickname('')
+      setAutoRegion('')
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsAutoChecking(true)
+      setCheckError('')
+      try {
+        const res = await fetch(`/api-proxy/games/${game.slug}/check-nickname?id=` + userId.trim() + (serverId ? '&server=' + serverId.trim() : ''), { credentials: 'include' })
+        
+        // Jika endpoint tidak tersedia (404/405), skip check tanpa error
+        if (res.status === 404 || res.status === 405) {
+          console.log(`[TopUp] Nickname check not available for ${game.slug}, skipping...`)
+          setAutoNickname('')
+          setAutoRegion('')
+          setCheckError('')
+          setIsAutoChecking(false)
+          return
+        }
+
+        const data = await res.json()
+
+        if (data.success && data.data?.nickname) {
+          setAutoNickname(data.data.nickname)
+          const region = data.data.region || 'global'
+          setAutoRegion(region)
+
+          setIsLoadingProducts(true)
+          setSelectedNominal(null)
+          try {
+            let productRes = await fetch(`/api-proxy/games/${game.slug}?region=` + region, { credentials: 'include' })
+            let productData = await productRes.json().catch(() => ({ success: false }))
+            
+            if (!productRes.ok || !productData.success || !extractProducts(productData).length) {
+              productRes = await fetch(`/api-proxy/games/${game.slug}?region=global`, { credentials: 'include' })
+              productData = await productRes.json().catch(() => ({ success: false }))
+            }
+
+            if (productRes.ok && productData.success) {
+              const products = extractProducts(productData)
+              const grouped = normalizeToGroups(products)
+              setImageLoadErrors({})
+              setDynamicNominals(grouped)
+              setCheckError('')
+            } else {
+              setImageLoadErrors({})
+              setDynamicNominals([])
+              setCheckError('Produk sedang tidak tersedia. Silakan hubungi admin.')
+            }
+          } catch (pErr) {
+            setImageLoadErrors({})
+            setDynamicNominals([])
+          } finally {
+            setIsLoadingProducts(false)
+          }
+        } else {
+          setAutoNickname('')
+          setAutoRegion('')
+          if (data.message) {
+            setCheckError(data.message)
+          }
+        }
+      } catch (err) {
+        // Network error — jangan tampilkan error, mungkin endpoint belum tersedia
+        console.log(`[TopUp] Nickname check failed for ${game.slug}:`, err)
+        setAutoNickname('')
+      } finally {
+        setIsAutoChecking(false)
+      }
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [userId, serverId, game.slug, needsServerId, gameConfig.minLength])
+
+  const canCheckout = useMemo(() => {
+    if (!selectedNominal) return false
+    if (!userId) return false
+    if (needsServerId && !serverId) return false
+    return true
+  }, [selectedNominal, userId, serverId, needsServerId])
+
+  const total = selectedNominal?.price || 0
 
   const handleBuyClick = async () => {
     if (!canCheckout) return
+
+    if (autoNickname) {
+      setPlayerInfo({
+        userId: userId.trim(),
+        serverId: serverId.trim() || null,
+        nickname: autoNickname,
+      })
+      setShowConfirm(true)
+      return
+    }
+
     setCheckingPlayer(true)
     setCheckError('')
     setPlayerInfo(null)
     setShowConfirm(true)
 
     try {
-      const res = await fetch('/api/check-player', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userId.trim(),
-          serverId: serverId.trim() || undefined,
-          gameSlug: game.slug,
-        }),
-      })
+      const res = await fetch(`/api-proxy/games/${game.slug}/check-nickname?id=` + userId.trim() + (serverId ? '&server=' + serverId.trim() : ''), { credentials: 'include' })
       const data = await res.json()
-      console.log('[check-player] response:', JSON.stringify(data))
 
-      if (!data.success) {
-        const debugInfo = data.debug ? ` | Debug: ${JSON.stringify(data.debug)}` : ''
-        console.warn('[check-player] error:', data.error, data.debug ?? '')
-        setCheckError((data.error || 'Gagal mengecek data pemain') + debugInfo)
-        setCheckingPlayer(false)
-        return
+      if (data.success && data.data?.nickname) {
+        setPlayerInfo({
+          userId: userId.trim(),
+          serverId: serverId.trim() || null,
+          nickname: data.data.nickname,
+        })
+        showSuccess(`Nickname ditemukan: ${data.data.nickname}`)
+      } else {
+        const msg = data.message || 'Data akun tidak valid'
+        setCheckError(msg)
+        showError(msg)
       }
-
-      // Direct response from VIP Reseller API
-      setPlayerInfo(data.data)
-      setCheckingPlayer(false)
-    } catch {
-      setCheckError('Terjadi kesalahan. Silakan coba lagi.')
+    } catch (err) {
+      setCheckError('Gagal memverifikasi data akun')
+    } finally {
       setCheckingPlayer(false)
     }
   }
@@ -157,82 +389,81 @@ export default function TopUpClient({ game }: Props) {
   const handleConfirmOrder = async () => {
     if (!playerInfo || !selectedNominal) return
     setCreatingPayment(true)
-    setPaymentError('')
+    setCheckError('')
+
+    const token = getToken()
+    if (!token) {
+      const msg = 'Silakan login terlebih dahulu untuk membuat pesanan'
+      setCheckError(msg)
+      showError(msg)
+      setCreatingPayment(false)
+      return
+    }
+
+    const frontendUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const redirectUrl = `${frontendUrl}/payment/success`
 
     try {
-      // 1. Cek stock dulu (skip kalau API tidak support)
-      let stockAvailable = true
-      try {
-        const stockRes = await fetch(`/api/vip-stock?service=${selectedNominal.id}`)
-        const stockData = await stockRes.json()
+      const res = await authFetch('/api-proxy/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          slug: game.slug,
+          id_produk: selectedNominal.code || selectedNominal.id,
+          id_player: playerInfo.userId,
+          server: playerInfo.serverId || '',
+          access_token: getToken() || token,
+          success_redirect_url: redirectUrl,
+          failure_redirect_url: redirectUrl,
+          success_url: redirectUrl,
+          failure_url: redirectUrl
+        })
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        const order = data.data?.order ?? {}
+        const resolvedOrderCode = order.invoice_number || order.id || 'ORD-SUCCESS'
         
-        // Skip kalau layanan tidak support cek stock
-        if (stockData.error?.includes('tidak support') || stockData.error?.includes('not support')) {
-          console.log('[stock-check] Skipped - not supported for this service')
-        } else if (!stockData.success || !stockData.data?.available) {
-          setPaymentError(stockData.error || 'Stok tidak tersedia / habis')
-          setCreatingPayment(false)
+        const paymentUrl = data.data?.xendit?.invoice_url || data.data?.order?.xendit_invoice_url
+        
+        if (paymentUrl) {
+          showSuccess('Pesanan dibuat! Mengalihkan ke pembayaran...')
+          window.location.href = paymentUrl
           return
         }
-      } catch {
-        // Skip kalau error
-        console.log('[stock-check] Skipped due to error')
-      }
 
-      // 2. Generate order code dulu untuk matching dengan webhook
-      const orderCode = `TRX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+        setOrderCode(resolvedOrderCode)
+        setOrderCreated(true)
 
-      // 3. Buat Xendit payment dengan external_id = orderCode
-      const res = await fetch('/api/payment/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: playerInfo.userId,
-          serverId: playerInfo.serverId,
-          nickname: playerInfo.nickname,
-          gameSlug: game.slug,
-          gameName: game.name,
-          itemLabel: selectedNominal.label,
-          itemPrice: selectedNominal.price,
-          externalId: orderCode, // untuk matching webhook
-        }),
-      })
-      const data = await res.json()
-      
-      if (data.success) {
-        setPaymentUrl(data.data.invoiceUrl)
-
-        // 4. Simpan order ke DB dengan order_code yang sama (status pending, VIP order nanti setelah bayar)
+        // Simpan snapshot untuk halaman nota
         try {
-          await fetch('/api/orders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              playerId: playerInfo!.userId,
-              serverId: playerInfo!.serverId,
-              nickname: playerInfo!.nickname,
-              gameSlug: game.slug,
-              gameName: game.name,
-              gameImage: game.image_url ?? null,
-              itemLabel: selectedNominal!.label,
-              itemPrice: selectedNominal!.price,
-              xenditInvoiceId: data.data.invoiceId,
-              xenditInvoiceUrl: data.data.invoiceUrl,
-              serviceCode: selectedNominal!.id,
-              orderCode, // kirim ke API supaya pakai order_code yang sama
-            }),
+          const snapshot = mapReceiptSnapshotFromOrder({
+            ...order,
+            nama_games: game.name,
+            nama_produk: selectedNominal.label,
+            harga_produk: selectedNominal.price,
+            id_player: playerInfo.userId,
+            id_server: playerInfo.serverId,
+            nickname: playerInfo.nickname,
+            image_url: game.image_url,
+            status: order.status || 'pending_payment'
           })
-        } catch { /* silent */ }
-
-        // 4. VIP order akan otomatis diproses setelah pembayaran via webhook Xendit
-        setDigiStatus('pending')
-        setDigiMessage('Menunggu pembayaran... Setelah bayar, diamond akan otomatis dikirim.')
+          saveReceiptSnapshot(snapshot)
+        } catch (snapErr) {
+          console.error('Failed to save receipt snapshot:', snapErr)
+        }
       } else {
-        setPaymentError(data.error || 'Gagal membuat link pembayaran')
+        const msg = data.message || 'Gagal membuat pesanan'
+        setCheckError(msg)
+        showError(msg)
       }
-    } catch {
-      setPaymentError('Terjadi kesalahan. Silakan coba lagi.')
+    } catch (err) {
+      console.error('Create order error:', err)
+      setCheckError('Gagal menghubungi server untuk membuat pesanan')
     } finally {
       setCreatingPayment(false)
     }
@@ -242,10 +473,8 @@ export default function TopUpClient({ game }: Props) {
     setShowConfirm(false)
     setPlayerInfo(null)
     setCheckError('')
-    setPaymentUrl(null)
-    setPaymentError('')
-    setDigiStatus('idle')
-    setDigiMessage('')
+    setOrderCreated(false)
+    setOrderCode(null)
   }
 
   return (
@@ -254,43 +483,101 @@ export default function TopUpClient({ game }: Props) {
       {/* ── Left Column ── */}
       <div className="lg:col-span-2 space-y-6">
         {/* Step 1 */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">
+        <div className="bg-white border-[3px] border-gray-900 rounded-xl p-6 shadow-[6px_6px_0px_#111827] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-300 rounded-bl-full -mr-10 -mt-10 border-b-[3px] border-l-[3px] border-gray-900 transition-transform group-hover:scale-110" />
+          <div className="flex items-center gap-4 mb-8 relative z-10">
+            <div className="w-10 h-10 rounded bg-[#ff90e8] border-[3px] border-gray-900 text-gray-900 text-lg font-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#111827] -rotate-3">
               1
             </div>
-            <h2 className="text-lg font-bold text-gray-900">Masukkan Data Akun</h2>
+            <h2 className="text-xl font-black text-gray-900 uppercase tracking-wide">Data Akun</h2>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">User ID</label>
+              <label className="block text-sm font-black uppercase tracking-wider text-gray-900 mb-2">User ID</label>
               <input
                 type="text"
-                placeholder={isMobileLegends ? 'Contoh: 123456789' : 'Contoh: 123456789'}
+                placeholder={gameConfig.placeholder}
                 value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                maxLength={gameConfig.maxLength}
+                onChange={(e) => setUserId(e.target.value.replace(/\D/g, '').slice(0, gameConfig.maxLength))}
+                className={
+                  "w-full border-[3px] rounded-lg px-4 py-3.5 text-base font-bold bg-gray-50 focus:bg-white focus:outline-none transition-all " +
+                  (checkError && checkError.includes('User ID') ? 'border-red-500 focus:shadow-[4px_4px_0px_#ef4444]' : 'border-gray-900 focus:shadow-[4px_4px_0px_#2563eb]')
+                }
               />
+              {checkError && checkError.includes('User ID') && (
+                <p className="text-[10px] text-red-600 font-bold mt-1 uppercase">× {checkError}</p>
+              )}
             </div>
 
-            {/* Server ID hanya untuk Mobile Legends */}
-            {isMobileLegends && (
+            {/* Server ID untuk game yang membutuhkan */}
+            {needsServerId && (
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Server ID</label>
+                <label className="block text-sm font-black uppercase tracking-wider text-gray-900 mb-2">Server ID</label>
                 <input
                   type="text"
                   placeholder="Contoh: 1234"
                   value={serverId}
-                  onChange={(e) => setServerId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  maxLength={5}
+                  onChange={(e) => setServerId(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  className={
+                    "w-full border-[3px] rounded-lg px-4 py-3.5 text-base font-bold bg-gray-50 focus:bg-white focus:outline-none transition-all " +
+                    (checkError && checkError.includes('Server ID') ? 'border-red-500 focus:shadow-[4px_4px_0px_#ef4444]' : 'border-gray-900 focus:shadow-[4px_4px_0px_#2563eb]')
+                  }
                 />
+                {checkError && checkError.includes('Server ID') && (
+                  <p className="text-[10px] text-red-600 font-bold mt-1 uppercase">× {checkError}</p>
+                )}
               </div>
             )}
 
-            <div className="flex items-start gap-2 text-gray-400 text-xs">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 mt-0.5">
-                <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+            {/* Real-time Nickname Result */}
+            {supportsNicknameCheck && userId && (
+              <div className="pt-2">
+                {isAutoChecking ? (
+                  <div className="flex items-center gap-2 text-blue-600 text-xs font-bold animate-pulse">
+                    <div className="w-3 h-3 border-[3px] border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    Mengecek nickname...
+                  </div>
+                ) : autoNickname ? (
+                  <div className="flex items-center gap-2 bg-[#f0fdf4] border-[3px] border-[#16a34a] p-3 rounded-xl shadow-[4px_4px_0px_#16a34a]">
+                    <div className="w-8 h-8 bg-white border-[3px] border-[#16a34a] rounded-lg flex items-center justify-center shadow-[2px_2px_0px_#16a34a]">
+                      <svg width="16" height="16" fill="none" stroke="#16a34a" strokeWidth="4" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-[#16a34a] font-black uppercase tracking-wider">Nickname Ditemukan</p>
+                        {autoRegion && (
+                          <span className="bg-blue-600 border-2 border-gray-900 shadow-[2px_2px_0_#111827] text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase leading-none">
+                            {autoRegion}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-black text-gray-900 mt-1">{autoNickname}</p>
+                    </div>
+                  </div>
+                ) : checkError && userId && (!needsServerId || serverId) && !checkError.includes('ID') ? (
+                  <div className="flex items-center gap-2 bg-[#fef2f2] border-[3px] border-red-500 p-3 rounded-xl shadow-[4px_4px_0px_#ef4444]">
+                    <div className="w-8 h-8 bg-white border-[3px] border-red-500 rounded-lg flex items-center justify-center shadow-[2px_2px_0px_#ef4444]">
+                      <svg width="16" height="16" fill="none" stroke="#dc2626" strokeWidth="4" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-red-600 font-black uppercase tracking-wider">Kesalahan</p>
+                      <p className="text-sm font-black text-gray-900 mt-1">{checkError}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            <div className="flex items-start gap-2 text-gray-600 font-medium text-xs bg-gray-50 border-2 border-dashed border-gray-400 p-3 rounded-lg">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="10"/><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4M12 16h.01"/>
               </svg>
               Pastikan data akun benar. Kesalahan pengisian di luar tanggung jawab kami.
             </div>
@@ -298,146 +585,204 @@ export default function TopUpClient({ game }: Props) {
         </div>
 
         {/* Step 2 */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">
+        <div className="bg-white border-[3px] border-gray-900 rounded-xl p-6 shadow-[6px_6px_0px_#111827] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-300 rounded-bl-full -mr-12 -mt-12 border-b-[3px] border-l-[3px] border-gray-900 transition-transform group-hover:scale-110" />
+          <div className="flex items-center gap-4 mb-8 relative z-10">
+            <div className="w-10 h-10 rounded bg-[#ffc900] border-[3px] border-gray-900 text-gray-900 text-lg font-black flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#111827] rotate-3">
               2
             </div>
-            <h2 className="text-lg font-bold text-gray-900">Pilih Nominal</h2>
+            <h2 className="text-xl font-black text-gray-900 uppercase tracking-wide">Pilih Nominal</h2>
           </div>
 
-          {/* Region Selector untuk ML */}
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Region / Server</label>
-            <select
-              value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              {regionOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="relative z-10">
+            {isLoadingProducts && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-lg">
+                <div className="flex flex-col items-center gap-3 bg-white border-[3px] border-gray-900 p-4 rounded-xl shadow-[4px_4px_0px_#111827]">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Updating...</p>
+                </div>
+              </div>
+            )}
+            
+            {dynamicNominals.length > 0 ? (
+              <div className="space-y-8">
+                {dynamicNominals.map((group) => (
+                  <div key={group.label}>
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="h-6 w-1.5 bg-blue-600 rounded-full shadow-[2px_2px_0px_#111827]" />
+                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest border-b-[3px] border-gray-900 pb-1 pr-4">{group.label}</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {group.produks.map((nominal) => {
+                        const hasImage = Boolean(nominal.image) && !imageLoadErrors[nominal.id]
+                        const badgeText = getProductBadgeText(nominal.label)
 
-          {servicesLoading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent" />
-            </div>
-          )}
-          
-          {servicesError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-              {servicesError}
-            </div>
-          )}
-          
-          {!servicesLoading && !servicesError && (
-            <div className="grid grid-cols-3 gap-3">
-              {services.map((svc) => (
-                <button
-                  key={svc.code}
-                  onClick={() => setSelectedNominal({
-                    id: svc.code,
-                    label: svc.name,
-                    price: svc.price,
-                    bonus: undefined,
-                  } as NominalItem)}
-                  className={`border-2 rounded-xl p-4 text-left transition-all ${
-                    selectedNominal?.id === svc.code
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 bg-white hover:border-blue-300'
-                  }`}
-                >
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{svc.name}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-gray-900 text-base">{formatRupiah(svc.price)}</p>
-                    {svc.normal_price > svc.price && (
-                      <p className="text-gray-400 text-sm line-through">{formatRupiah(svc.normal_price)}</p>
-                    )}
+                        return (
+                        <button
+                          key={nominal.id}
+                          onClick={() => setSelectedNominal(nominal)}
+                          className={
+                            "border-[3px] rounded-xl p-3 text-left transition-all duration-200 relative " +
+                            (selectedNominal?.id === nominal.id
+                              ? 'border-blue-600 bg-blue-50 shadow-[4px_4px_0px_#2563eb] -translate-y-1'
+                              : 'border-gray-900 bg-white hover:bg-gray-50 hover:shadow-[4px_4px_0px_#111827] hover:-translate-y-1')
+                          }
+                        >
+                          <div className="flex items-center gap-3">
+                            {hasImage ? (
+                              <div className="w-12 h-12 shrink-0 border-[3px] border-gray-900 rounded-lg overflow-hidden bg-white flex items-center justify-center shadow-[2px_2px_0px_#111827]">
+                                <Image
+                                  src={nominal.image!}
+                                  alt={nominal.label}
+                                  width={48}
+                                  height={48}
+                                  unoptimized
+                                  className="w-full h-full object-contain p-1"
+                                  onError={() => {
+                                    setImageLoadErrors((prev) => ({ ...prev, [nominal.id]: true }))
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-12 h-12 shrink-0 border-[3px] border-gray-900 rounded-lg bg-[#a5f3fc] flex items-center justify-center shadow-[2px_2px_0px_#111827]">
+                                <span className="text-[11px] font-black text-gray-900 tracking-tighter">{badgeText}</span>
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-black text-gray-900 leading-tight truncate">
+                                {nominal.label}
+                              </p>
+                              <p className="font-black text-blue-600 text-[15px] mt-1 drop-shadow-[1px_1px_0_#fff]">
+                                {formatRupiah(nominal.price)}
+                              </p>
+                              {nominal.originalPrice && nominal.originalPrice > nominal.price && (
+                                <p className="text-[10px] text-red-500 line-through font-bold">
+                                  {formatRupiah(nominal.originalPrice)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {nominal.bonus && (
+                            <div className="mt-3 inline-block bg-[#16a34a] border-[2px] border-gray-900 shadow-[2px_2px_0px_#111827] px-2 py-1 rounded-md text-[10px] font-black text-white uppercase tracking-wider">
+                              +{nominal.bonus}
+                            </div>
+                          )}
+                        </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 flex flex-col items-center justify-center border-[3px] border-gray-900 border-dashed rounded-xl bg-gray-50 shadow-[inset_4px_4px_0px_#e2e8f0]">
+                <svg className="w-14 h-14 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0l-4 4m-8-4l-4 4" />
+                </svg>
+                <p className="text-gray-900 font-black text-lg uppercase">Produk Tidak Ditemukan</p>
+                <p className="text-sm font-bold text-gray-500 mt-1">Silakan coba lagi beberapa saat atau pilih region lain.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Right Column — Ringkasan ── */}
       <div className="lg:col-span-1">
-        <div className="sticky top-20 bg-white border border-gray-200 rounded-2xl p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-6">Ringkasan</h3>
+        <div className="sticky top-24 bg-[#f8fafc] border-[3px] border-gray-900 rounded-xl p-6 shadow-[6px_6px_0px_#111827] relative">
+          <div className="absolute top-0 right-0 w-8 h-8 bg-pink-400 rounded-bl-xl border-b-[3px] border-l-[3px] border-gray-900" />
+          <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-wider border-b-[3px] border-gray-900 pb-3">Ringkasan</h3>
 
-          <div className="space-y-3 mb-6">
+          <div className="space-y-4 mb-6">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Game</span>
-              <span className="font-bold text-gray-900">{game.name.split(':')[0].trim()}</span>
+              <span className="text-gray-500 font-bold uppercase">Game</span>
+              <span className="font-black text-gray-900 text-right">{game.name.split(':')[0].trim()}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">User ID</span>
-              <span className="font-semibold text-gray-900">
+              <span className="text-gray-500 font-bold uppercase">User ID</span>
+              <span className="font-black text-gray-900 text-right">
                 {userId ? userId : <span className="text-gray-300">-</span>}
               </span>
             </div>
-            {isMobileLegends && (
+            {needsServerId && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Server ID</span>
-                <span className="font-semibold text-gray-900">
+                <span className="text-gray-500 font-bold uppercase">Server</span>
+                <span className="font-black text-gray-900 text-right">
                   {serverId ? serverId : <span className="text-gray-300">-</span>}
                 </span>
               </div>
             )}
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Item</span>
-              <span className="font-semibold text-gray-900">
+              <span className="text-gray-500 font-bold uppercase">Item</span>
+              <span className="font-black text-gray-900 text-right">
                 {selectedNominal ? selectedNominal.label : <span className="text-gray-300">-</span>}
               </span>
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 mb-6">
+          <div className="border-t-[3px] border-gray-900 pt-5 mb-8">
             <div className="flex items-center justify-between">
-              <span className="text-gray-700 font-semibold">Total</span>
-              <span className="text-2xl font-black text-gray-900">{total > 0 ? formatRupiah(total) : 'Rp 0'}</span>
+              <span className="text-gray-900 font-black uppercase text-lg">Total</span>
+              <span className="text-3xl font-black text-blue-600 drop-shadow-[1px_1px_0_#111827]">{total > 0 ? formatRupiah(total) : 'Rp 0'}</span>
             </div>
           </div>
 
-          <button
-            onClick={handleBuyClick}
-            disabled={!canCheckout}
-            className={`w-full font-bold py-3.5 rounded-xl transition-colors text-sm ${
-              canCheckout
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-blue-600 text-white opacity-60 cursor-not-allowed'
-            }`}
-          >
-            Beli Sekarang
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleBuyClick}
+              disabled={!canCheckout}
+              className={
+                "w-full font-black py-4 rounded-xl border-[3px] border-gray-900 transition-all text-lg uppercase tracking-wider " +
+                (canCheckout
+                  ? 'bg-[#ffc900] hover:bg-yellow-400 text-gray-900 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px]'
+                  : 'bg-gray-200 text-gray-400 shadow-none cursor-not-allowed')
+              }
+            >
+              Beli Sekarang
+            </button>
+            <button
+              onClick={handleAddToCart}
+              disabled={!canCheckout || addingToCart}
+              className={
+                "w-full font-black py-4 rounded-xl border-[3px] border-gray-900 transition-all text-lg uppercase tracking-wider flex items-center justify-center gap-2 " +
+                (canCheckout && !addingToCart
+                  ? 'bg-white hover:bg-gray-50 text-gray-900 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px]'
+                  : 'bg-gray-100 text-gray-400 shadow-none cursor-not-allowed')
+              }
+            >
+              {addingToCart ? (
+                <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              )}
+              Tambah Keranjang
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
     {/* ── Confirmation Popup ── */}
-
     {showConfirm && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={() => !checkingPlayer && !creatingPayment && handleCloseConfirm()}
         />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div className="relative bg-white rounded-2xl border-[3px] border-gray-900 shadow-[8px_8px_0px_#111827] w-full max-w-sm p-6 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-lg font-bold text-gray-900">Konfirmasi Pesanan</h3>
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-400 via-yellow-400 to-cyan-400 border-b-[3px] border-gray-900" />
+          <div className="flex items-center justify-between mb-6 mt-2">
+            <h3 className="text-xl font-black text-gray-900 uppercase tracking-widest">Konfirmasi</h3>
             {!checkingPlayer && !creatingPayment && (
               <button
                 onClick={handleCloseConfirm}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-900 hover:text-red-600 transition-colors"
               >
-                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <path d="M18 6L6 18M6 6l12 12"/>
+                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12"/>
                 </svg>
               </button>
             )}
@@ -445,194 +790,101 @@ export default function TopUpClient({ game }: Props) {
 
           {/* Loading: cek player */}
           {checkingPlayer && (
-            <div className="flex flex-col items-center gap-4 py-6">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
-              <p className="text-gray-500 text-sm">Mengecek data akun...</p>
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-12 h-12 border-4 border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
+              <p className="text-gray-900 font-bold uppercase tracking-wider">Mengecek data...</p>
             </div>
           )}
 
-          {/* Loading: buat invoice */}
+          {/* Loading: create order */}
           {creatingPayment && (
-            <div className="flex flex-col items-center gap-4 py-6">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-green-500 border-t-transparent" />
-              <p className="text-gray-500 text-sm">Membuat link pembayaran...</p>
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-12 h-12 border-4 border-gray-900 border-t-green-500 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
+              <p className="text-gray-900 font-bold uppercase tracking-wider">Membuat pesanan...</p>
             </div>
           )}
 
-          {/* Payment URL ready */}
-          {!creatingPayment && paymentUrl && (
-            <div>
-              <div className="flex flex-col items-center gap-3 p-5 bg-green-50 border border-green-200 rounded-xl mb-4">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <svg width="24" height="24" fill="none" stroke="#16a34a" strokeWidth="2.5" viewBox="0 0 24 24">
+          {/* Order created success */}
+          {!creatingPayment && orderCreated && orderCode && (
+            <div className="animate-in fade-in zoom-in duration-200">
+              <div className="flex flex-col items-center gap-3 p-6 bg-green-50 border-[3px] border-green-500 rounded-xl mb-6 shadow-[4px_4px_0px_#16a34a]">
+                <div className="w-14 h-14 bg-white border-[3px] border-green-500 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_#16a34a]">
+                  <svg width="28" height="28" fill="none" stroke="#16a34a" strokeWidth="4" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
                   </svg>
                 </div>
-                <p className="font-bold text-gray-900 text-center">Invoice berhasil dibuat!</p>
-                <p className="text-sm text-gray-500 text-center">Klik tombol di bawah untuk melanjutkan ke halaman pembayaran.</p>
+                <p className="font-black text-gray-900 text-center uppercase tracking-wider mt-2">Berhasil Dibuat!</p>
+                <p className="text-sm font-bold text-gray-600 text-center bg-white px-3 py-1 rounded-md border-2 border-gray-900 shadow-[2px_2px_0_#111827]">{orderCode}</p>
               </div>
 
-              {/* Digiflazz status — hanya ML */}
-              {digiStatus !== 'idle' && (
-                <div className={`flex items-start gap-3 rounded-xl p-4 mb-4 text-sm ${
-                  digiStatus === 'success' ? 'bg-emerald-50 border border-emerald-200' :
-                  digiStatus === 'failed'  ? 'bg-red-50 border border-red-200' :
-                  digiStatus === 'pending' ? 'bg-yellow-50 border border-yellow-200' :
-                  'bg-blue-50 border border-blue-200'
-                }`}>
-                  {digiStatus === 'processing' && (
-                    <svg className="animate-spin w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z"/>
-                    </svg>
-                  )}
-                  {digiStatus === 'success' && (
-                    <svg className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                  )}
-                  {digiStatus === 'failed' && (
-                    <svg className="w-4 h-4 mt-0.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                  )}
-                  {digiStatus === 'pending' && (
-                    <svg className="w-4 h-4 mt-0.5 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-                    </svg>
-                  )}
-                  <div>
-                    <p className={`font-semibold ${
-                      digiStatus === 'success' ? 'text-emerald-700' :
-                      digiStatus === 'failed'  ? 'text-red-600' :
-                      digiStatus === 'pending' ? 'text-yellow-700' :
-                      'text-blue-700'
-                    }`}>
-                      {digiStatus === 'processing' && 'Mengirim top up diamond...'}
-                      {digiStatus === 'success'    && 'Diamond berhasil dikirim!'}
-                      {digiStatus === 'failed'     && 'Top up gagal'}
-                      {digiStatus === 'pending'    && 'Sedang diproses'}
-                    </p>
-                    {digiMessage && (
-                      <p className="text-xs text-gray-500 mt-0.5">{digiMessage}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <a
-                href={paymentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold text-center transition-colors mb-3"
+              <Link
+                href={`/payment/success?orderCode=${orderCode}`}
+                className="block w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl border-[3px] border-gray-900 text-lg font-black text-center transition-all mb-3 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] uppercase tracking-wider"
               >
-                Bayar Sekarang →
-              </a>
-              <button
-                onClick={handleCloseConfirm}
-                className="w-full py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Tutup
-              </button>
-            </div>
-          )}
-
-          {/* Payment error */}
-          {!creatingPayment && paymentError && (
-            <div className="py-2">
-              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
-                <svg width="20" height="20" fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-                </svg>
-                <p className="text-red-600 text-sm">{paymentError}</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCloseConfirm}
-                  className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Tutup
-                </button>
-                <button
-                  onClick={handleConfirmOrder}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors"
-                >
-                  Coba Lagi
-                </button>
-              </div>
+                Lihat Nota
+              </Link>
             </div>
           )}
 
           {/* Error: cek player */}
-          {!checkingPlayer && checkError && (
-            <div className="py-4">
-              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
-                <svg width="20" height="20" fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-                </svg>
-                <p className="text-red-600 text-sm">{checkError}</p>
+          {!checkingPlayer && !creatingPayment && !orderCreated && checkError && (
+            <div className="py-4 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center gap-4 p-5 bg-red-50 border-[3px] border-red-500 rounded-xl mb-6 shadow-[4px_4px_0px_#ef4444]">
+                <div className="w-10 h-10 shrink-0 bg-white border-[3px] border-red-500 rounded-lg flex items-center justify-center shadow-[2px_2px_0px_#ef4444]">
+                  <svg width="20" height="20" fill="none" stroke="#dc2626" strokeWidth="3" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <p className="text-red-600 text-sm font-black uppercase tracking-wide leading-tight">{checkError}</p>
               </div>
               <button
                 onClick={handleCloseConfirm}
-                className="w-full py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="w-full py-3.5 border-[3px] border-gray-900 rounded-xl text-base font-black text-gray-900 bg-gray-100 hover:bg-gray-200 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all uppercase"
               >
-                Tutup
+                Kembali
               </button>
             </div>
           )}
 
-          {/* Success state — show player info (hanya jika belum bayar) */}
-          {!checkingPlayer && !creatingPayment && !paymentUrl && !paymentError && playerInfo && (
+          {/* Show player info - ready to confirm */}
+          {!checkingPlayer && !creatingPayment && !orderCreated && playerInfo && (
             <>
-              {/* Player info card */}
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
-                <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-2">Data Akun Ditemukan</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-sm">
-                      {playerInfo!.nickname.charAt(0).toUpperCase()}
-                    </span>
+              <div className="bg-gray-50 border-[3px] border-gray-900 rounded-xl p-5 mb-6 shadow-[inset_4px_4px_0px_#e2e8f0]">
+                <p className="text-xs font-black text-blue-600 uppercase tracking-widest mb-3 border-b-[3px] border-gray-900 pb-2 inline-block">Data Ditemukan</p>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#ffc900] border-[3px] border-gray-900 rounded-lg flex items-center justify-center shadow-[2px_2px_0px_#111827] rotate-3 text-xl font-black">
+                    {playerInfo.nickname.charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-900">{playerInfo!.nickname}</p>
-                    <p className="text-xs text-gray-500">
-                      ID: {playerInfo!.userId}
-                      {playerInfo!.serverId && ` · Server: ${playerInfo!.serverId}`}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-lg font-black text-gray-900 truncate">{playerInfo.nickname}</p>
+                    <p className="text-sm font-bold text-gray-600 mt-1">
+                      ID: {playerInfo.userId} {playerInfo.serverId && <span className="opacity-60">({playerInfo.serverId})</span>}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Order summary */}
-              <div className="space-y-2 mb-5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Game</span>
-                  <span className="font-semibold text-gray-900">{game.name.split(':')[0].trim()}</span>
+              <div className="bg-blue-50 border-[3px] border-blue-600 rounded-xl p-5 mb-6 shadow-[4px_4px_0px_#2563eb]">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-blue-900 font-bold text-sm uppercase tracking-wider">Item</span>
+                  <span className="font-black text-blue-900 bg-white border-2 border-blue-600 px-2 py-0.5 rounded shadow-[1px_1px_0_#2563eb]">{selectedNominal?.label}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Item</span>
-                  <span className="font-semibold text-gray-900">{selectedNominal?.label}</span>
-                </div>
-                <div className="flex justify-between border-t border-gray-100 pt-2 mt-2">
-                  <span className="font-bold text-gray-900">Total</span>
-                  <span className="font-black text-blue-600">{formatRupiah(total)}</span>
+                <div className="flex justify-between items-center border-t-[3px] border-blue-600/20 pt-3">
+                  <span className="text-blue-900 font-bold text-sm uppercase tracking-wider">Total Harga</span>
+                  <span className="font-black text-xl text-blue-700">{formatRupiah(selectedNominal?.price || 0)}</span>
                 </div>
               </div>
-
-              <p className="text-xs text-gray-400 text-center mb-4">
-                Pastikan nickname di atas adalah akun kamu. Top up tidak bisa dibatalkan.
-              </p>
 
               <div className="flex gap-3">
                 <button
                   onClick={handleCloseConfirm}
-                  className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-3.5 border-[3px] border-gray-900 rounded-xl text-sm font-black text-gray-900 bg-gray-100 hover:bg-gray-200 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all uppercase"
                 >
                   Batal
                 </button>
                 <button
                   onClick={handleConfirmOrder}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors"
+                  className="flex-1 py-3.5 border-[3px] border-gray-900 rounded-xl text-sm font-black text-gray-900 bg-[#16a34a] hover:bg-green-500 shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all uppercase"
                 >
                   Lanjut Bayar
                 </button>

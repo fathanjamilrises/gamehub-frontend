@@ -33,14 +33,15 @@ export default function GameCard({ game, href }: Props) {
 
   return (
     <Link href={link} className="block group">
-      <div className="relative rounded-2xl overflow-hidden aspect-[3/4] shadow-sm hover:shadow-lg transition-shadow duration-300">
+      <div className="relative rounded-xl overflow-hidden aspect-[4/5] border-[3px] border-gray-900 shadow-[4px_4px_0px_#111827] transition-all duration-200 group-hover:-translate-x-1 group-hover:-translate-y-1 group-hover:shadow-[6px_6px_0px_#ff90e8]">
         {/* Background: Image jika ada, fallback ke gradient */}
         {hasImage ? (
           <Image
             src={game.image_url}
             alt={game.name}
             fill
-            className="object-cover"
+            unoptimized
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
           />
         ) : (
@@ -75,22 +76,24 @@ export default function GameCard({ game, href }: Props) {
         )}
 
         {/* Overlay gradient bottom */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
 
         {/* Badge Instant */}
-        <div className="absolute top-3 left-3">
-          <span className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 inline-block" />
+        <div className="absolute top-2.5 left-2.5 z-10">
+          <span className="inline-flex items-center gap-1 bg-[#ffc900] text-gray-900 text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded border-[3px] border-gray-900 uppercase tracking-widest shadow-[2px_2px_0px_#111827]">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 border-2 border-gray-900 inline-block animate-pulse" />
             {game.badge}
           </span>
         </div>
 
         {/* Info bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-3.5">
-          <p className="text-white font-bold text-sm leading-tight truncate group-hover:text-blue-200 transition-colors">
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-10 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+          <p className="text-white font-black text-sm leading-tight truncate drop-shadow-[2px_2px_0_#111827] uppercase tracking-wide">
             {game.name}
           </p>
-          <p className="text-white/60 text-xs mt-0.5">{game.publisher}</p>
+          <p className="text-yellow-300 font-bold text-[10px] mt-0.5 drop-shadow-[1px_1px_0_#111827] uppercase tracking-widest">
+            {game.publisher}
+          </p>
         </div>
       </div>
     </Link>

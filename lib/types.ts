@@ -6,7 +6,10 @@ export interface NominalItem {
   label: string
   amount: number
   price: number
+  originalPrice?: number
   bonus?: string
+  image?: string
+  code?: string
 }
 
 export interface GameListItem {

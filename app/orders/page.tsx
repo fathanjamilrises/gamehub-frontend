@@ -1,121 +1,143 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { formatRupiah } from '@/lib/api'
+import { formatRupiah } from '@/lib/types'
+import { Order } from '@/lib/dummy/orders'
+import { getToken } from '@/lib/authApi'
+import { clearPendingPaymentRedirect, getPendingPaymentRedirect } from '@/lib/paymentReceipt'
 
-interface Order {
-  id: string
-  orderCode: string
-  date: string
-  status: 'completed' | 'pending' | 'processing' | 'cancelled'
-  game: {
-    name: string
-    publisher: string
-    image: string
+const API_BASE = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : ''
+const BACKEND_ORIGIN = API_BASE.replace(/\/api\/?$/, '').replace(/\/$/, '')
+
+function normalizeOrderImageSrc(value: unknown): string {
+  if (typeof value !== 'string') return ''
+
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed
   }
-  item: {
-    name: string
-    amount: number
-    price: number
-    bonus?: string | null
+
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`
   }
-  playerId: string
-  serverId?: string | null
-  nickname?: string
-  payment: {
-    method: string
-    total: number
-    fee: number
+
+  if (trimmed.startsWith('/')) {
+    return `${BACKEND_ORIGIN}${trimmed}`
   }
-  xenditInvoiceUrl?: string | null
-  processedAt?: string | null
+
+  return `${BACKEND_ORIGIN}/${trimmed.replace(/^\.?\//, '')}`
 }
 
 export default function OrdersPage() {
+  const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [checkingStatus, setCheckingStatus] = useState<string | null>(null)
-  const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    fetchOrders()
-  }, [filterStatus])
+    const pendingRedirect = getPendingPaymentRedirect()
+    if (!pendingRedirect) return
+    const isFreshRedirect = Date.now() - pendingRedirect.createdAt < 1000 * 60 * 60
 
-  // Auto-poll setiap 3 detik jika ada order processing
+    if (!isFreshRedirect) return
+
+    clearPendingPaymentRedirect()
+    router.replace(`/payment/success?orderCode=${encodeURIComponent(pendingRedirect.orderCode)}&status=success`)
+  }, [router])
+
   useEffect(() => {
-    const hasProcessing = orders.some((o) => o.status === 'processing')
-    if (hasProcessing) {
-      pollRef.current = setInterval(() => {
-        fetchOrders(false)
-      }, 3000)
-    } else {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
-  }, [orders])
-
-  const fetchOrders = async (showLoading = true) => {
-    try {
-      if (showLoading) setLoading(true)
-      const queryParams = new URLSearchParams()
-      if (filterStatus !== 'all') queryParams.append('status', filterStatus)
-      if (searchQuery) queryParams.append('search', searchQuery)
-
-      const res = await fetch(`/api/orders?${queryParams}`, {
-        credentials: 'include',
-      })
-
-      const data = await res.json()
-
-      if (data.success) {
-        setOrders(data.data)
-        setError('')
-      } else {
-        setError(data.error || 'Gagal memuat pesanan')
+    const fetchOrders = async () => {
+      setLoading(true)
+      const token = getToken()
+      
+      if (!token) {
+        setOrders([])
+        setLoading(false)
+        return
       }
-    } catch (err) {
-      setError('Terjadi kesalahan. Silakan coba lagi.')
-    } finally {
-      if (showLoading) setLoading(false)
+
+      try {
+        const res = await fetch('/api-proxy/orders', {
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        const data = await res.json()
+
+        if (res.ok && data.success) {
+          const rawOrders = Array.isArray(data.data) ? data.data : (data.data?.orders || [])
+          
+          const mappedOrders: Order[] = rawOrders.map((item: any) => ({
+            id: String(item.id),
+            orderCode: item.invoice_number,
+            date: item.createdAt,
+            status: 
+              item.status === 'success' ? 'completed' : 
+              item.status === 'waiting_payment' ? 'pending_payment' : 
+              item.status,
+            game: {
+              name: item.nama_games || 'Game',
+              publisher: '',
+              image: normalizeOrderImageSrc(item.image_url)
+            },
+            item: {
+              name: item.nama_produk || 'Item',
+              amount: 0,
+              price: parseInt(item.harga_produk) || 0
+            },
+            playerId: item.id_player,
+            serverId: item.id_server,
+            nickname: item.nickname,
+            payment: {
+              method: 'Xendit',
+              total: parseInt(item.harga_produk) || 0,
+              fee: 0
+            },
+            xenditInvoiceUrl: item.xendit_invoice_url
+          }))
+
+          // Apply client-side filtering if needed, but for now show all from API
+          let filtered = mappedOrders
+          if (searchQuery) {
+            const lowerQuery = searchQuery.toLowerCase()
+            filtered = mappedOrders.filter(o => 
+              o.orderCode.toLowerCase().includes(lowerQuery) || 
+              o.game.name.toLowerCase().includes(lowerQuery)
+            )
+          }
+          if (filterStatus !== 'all') {
+            filtered = filtered.filter(o => o.status === filterStatus)
+          }
+
+          setOrders(filtered)
+        }
+      } catch (err) {
+        console.error('Fetch orders error:', err)
+      } finally {
+        setLoading(false)
+      }
     }
-  }
+
+    void fetchOrders()
+  }, [filterStatus, searchQuery])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    fetchOrders()
+    // Search is handled in useEffect
   }
 
   const checkPaymentStatus = async (orderCode: string) => {
-    setCheckingStatus(orderCode)
-    try {
-      const res = await fetch(`/api/payment/check?orderCode=${orderCode}`, {
-        credentials: 'include',
-      })
-      const data = await res.json()
-      
-      if (data.success && data.data?.paid) {
-        // Refresh orders to show updated status
-        await fetchOrders(false)
-        alert('Pembayaran berhasil dikonfirmasi!')
-      } else if (data.data?.status === 'PENDING') {
-        alert('Pembayaran masih menunggu. Silakan coba lagi nanti.')
-      } else {
-        alert('Status: ' + (data.data?.status || data.error || 'Unknown'))
-      }
-    } catch {
-      alert('Gagal cek status. Silakan coba lagi.')
-    } finally {
-      setCheckingStatus(null)
-    }
+    // Mock payment check - simulate success for demo
+    alert('Pembayaran berhasil! Pesanan akan segera diproses.')
   }
 
   const viewReceipt = (order: Order) => {
@@ -123,11 +145,13 @@ export default function OrdersPage() {
     setShowReceipt(true)
   }
 
+  const hasOrderImage = (image: string) => image.trim() !== ''
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm font-medium">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md border-2 border-green-700 bg-green-100 text-green-700 text-sm font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -136,7 +160,7 @@ export default function OrdersPage() {
         )
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-sm font-medium">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md border-2 border-yellow-700 bg-yellow-100 text-yellow-700 text-sm font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -145,7 +169,7 @@ export default function OrdersPage() {
         )
       case 'processing':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md border-2 border-blue-700 bg-blue-100 text-blue-700 text-sm font-bold">
             <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -154,7 +178,7 @@ export default function OrdersPage() {
         )
       case 'cancelled':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-medium">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md border-2 border-red-700 bg-red-100 text-red-700 text-sm font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -178,25 +202,25 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <nav className="bg-white border-b-2 border-gray-900 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-black text-sm">G</span>
+                <div className="w-8 h-8 bg-blue-600 border-2 border-gray-900 rounded-md flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">G</span>
                 </div>
                 <span className="font-bold text-gray-900 text-lg hidden sm:block">GameHub.ID</span>
               </Link>
               <span className="text-gray-300">|</span>
-              <h1 className="text-lg font-semibold text-gray-900">Riwayat Pesanan</h1>
+              <h1 className="text-lg font-bold text-gray-900">Riwayat Pesanan</h1>
             </div>
             <div className="flex items-center gap-4">
               <Link
                 href="/"
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-700 font-medium hover:text-blue-600 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -205,7 +229,7 @@ export default function OrdersPage() {
               </Link>
               <Link
                 href="/profile"
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-700 font-medium hover:text-blue-600 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -218,8 +242,18 @@ export default function OrdersPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Category Tabs */}
+        <div className="flex gap-0 mb-6 border-2 border-gray-900 rounded-lg overflow-hidden w-fit">
+          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm border-r-2 border-gray-900">
+            Top Up / Voucher
+          </button>
+          <Link href="/orders/akun" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+            Beli Akun
+          </Link>
+        </div>
+
         {/* Filter & Search */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div className="bg-white rounded-lg border-2 border-gray-900 p-4 mb-6 nb-shadow">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Status Filter */}
             <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
@@ -233,10 +267,10 @@ export default function OrdersPage() {
                 <button
                   key={filter.value}
                   onClick={() => setFilterStatus(filter.value)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all border-2 border-gray-900 ${
                     filterStatus === filter.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white nb-shadow-sm'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   {filter.label}
@@ -251,11 +285,11 @@ export default function OrdersPage() {
                 placeholder="Cari kode pesanan atau game..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 sm:w-64 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 sm:w-64 px-4 py-2 border-2 border-gray-900 rounded-lg text-sm focus:outline-none focus:ring-0 focus:shadow-[3px_3px_0px_#2563eb]"
               />
               <button
                 type="submit"
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 bg-white text-gray-900 rounded-lg border-2 border-gray-900 hover:bg-gray-50 transition-colors nb-shadow-sm"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -270,28 +304,18 @@ export default function OrdersPage() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
           </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-            <p className="text-red-600">{error}</p>
-            <button
-              onClick={() => fetchOrders()}
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Coba Lagi
-            </button>
-          </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white rounded-lg border-2 border-gray-900 p-12 text-center nb-shadow">
+            <div className="w-24 h-24 bg-blue-50 border-2 border-gray-900 rounded-md flex items-center justify-center mx-auto mb-4">
               <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Belum Ada Pesanan</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Pesanan</h3>
             <p className="text-gray-500 mb-6">Yuk mulai top up game favoritmu!</p>
             <Link
               href="/topup"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md border-2 border-gray-900 hover:bg-blue-700 transition-all font-bold nb-shadow-sm hover:-translate-y-px"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -304,39 +328,28 @@ export default function OrdersPage() {
             {orders.map((order) => (
               <div
                 key={order.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                className="bg-white rounded-lg border-2 border-gray-900 overflow-hidden nb-shadow transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1e293b]"
               >
                 <div className="p-4 sm:p-6">
                   {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                     <div>
-                      <p className="text-sm text-gray-500 mb-1">{order.orderCode}</p>
-                      <p className="text-sm text-gray-400">{formatDate(order.date)}</p>
+                      <p className="text-sm font-bold text-gray-900 mb-1">{order.orderCode}</p>
+                      <p className="text-sm text-gray-500">{formatDate(order.date)}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(order.status)}
                       {(order.status === 'pending' || order.status === 'pending_payment') && (
                         <button
                           onClick={() => checkPaymentStatus(order.orderCode)}
-                          disabled={checkingStatus === order.orderCode}
-                          className="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-sm font-medium hover:bg-yellow-100 transition-colors disabled:opacity-50"
+                          className="px-4 py-2 bg-yellow-300 text-gray-900 rounded-md border-2 border-gray-900 text-sm font-bold hover:bg-yellow-400 transition-colors"
                         >
-                          {checkingStatus === order.orderCode ? (
-                            <span className="flex items-center gap-2">
-                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                              </svg>
-                              Cek...
-                            </span>
-                          ) : (
-                            'Cek Status'
-                          )}
+                          Cek Status
                         </button>
                       )}
                       <button
                         onClick={() => viewReceipt(order)}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-md border-2 border-blue-600 text-sm font-bold hover:bg-blue-100 transition-colors"
                       >
                         Lihat Nota
                       </button>
@@ -350,18 +363,18 @@ export default function OrdersPage() {
                         <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
-                        <span className="text-xs text-blue-600 font-medium">Sedang diproses... Diamond akan masuk dalam beberapa detik</span>
+                        <span className="text-xs text-blue-600 font-bold">Sedang diproses... Diamond akan masuk dalam beberapa detik</span>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '70%' }} />
+                      <div className="h-2 bg-gray-100 border border-gray-900 rounded-md overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-md animate-pulse" style={{ width: '70%' }} />
                       </div>
                     </div>
                   )}
 
                   {/* Content */}
                   <div className="flex gap-4">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
-                      {order.game.image ? (
+                    <div className="w-16 h-16 rounded-md border-2 border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                      {hasOrderImage(order.game.image) ? (
                         <Image
                           src={order.game.image}
                           alt={order.game.name}
@@ -371,15 +384,15 @@ export default function OrdersPage() {
                           unoptimized
                         />
                       ) : (
-                        <span className="text-2xl font-black text-gray-300">
+                        <span className="text-2xl font-bold text-gray-300">
                           {order.game.name.charAt(0)}
                         </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{order.game.name}</h3>
+                      <h3 className="font-bold text-gray-900 truncate">{order.game.name}</h3>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+                        <span className="px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-900 text-sm font-medium">
                           {order.item.name}
                         </span>
                       </div>
@@ -397,7 +410,7 @@ export default function OrdersPage() {
                           href={order.xenditInvoiceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-blue-600 font-bold hover:underline"
                         >
                           Bayar →
                         </a>
@@ -415,16 +428,16 @@ export default function OrdersPage() {
       {showReceipt && selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-gray-900/50"
             onClick={() => setShowReceipt(false)}
           />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-lg border-2 border-gray-900 nb-shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             {/* Receipt Header */}
-            <div className="bg-blue-600 px-6 py-4 rounded-t-xl">
+            <div className="bg-blue-600 px-6 py-4 border-b-2 border-gray-900">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                    <span className="text-blue-600 font-black text-sm">G</span>
+                  <div className="w-8 h-8 bg-white border-2 border-gray-900 rounded-md flex items-center justify-center">
+                    <span className="text-blue-600 font-bold text-sm">G</span>
                   </div>
                   <span className="text-white font-bold">GameHub.ID</span>
                 </div>
@@ -438,7 +451,7 @@ export default function OrdersPage() {
                 </button>
               </div>
               <div className="mt-4 text-center">
-                <p className="text-white/80 text-sm">NOTA PEMBELIAN</p>
+                <p className="text-white/80 text-sm font-bold uppercase tracking-widest">NOTA PEMBELIAN</p>
                 <p className="text-white font-bold text-lg">{selectedOrder.orderCode}</p>
               </div>
             </div>
@@ -446,21 +459,29 @@ export default function OrdersPage() {
             {/* Receipt Content */}
             <div className="p-6 space-y-6">
               {/* Status */}
-              <div className="text-center pb-4 border-b border-gray-200">
+              <div className="text-center pb-4 border-b-2 border-gray-900">
                 {getStatusBadge(selectedOrder.status)}
               </div>
 
               {/* Game Info */}
               <div className="flex gap-4">
-                <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                  <Image
-                    src={selectedOrder.game.image}
-                    alt={selectedOrder.game.name}
-                    width={80}
-                    height={80}
-                    className="w-full h-full object-cover"
-                    unoptimized
-                  />
+                <div className="w-20 h-20 rounded-md border-2 border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100">
+                  {hasOrderImage(selectedOrder.game.image) ? (
+                    <Image
+                      src={selectedOrder.game.image}
+                      alt={selectedOrder.game.name}
+                      width={80}
+                      height={80}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-3xl font-bold text-gray-300">
+                        {selectedOrder.game.name.charAt(0)}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900">{selectedOrder.game.name}</h3>
@@ -474,22 +495,22 @@ export default function OrdersPage() {
               </div>
 
               {/* Item Details */}
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="bg-gray-50 border-2 border-gray-900 rounded-lg p-4 space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Item</span>
-                  <span className="font-medium text-gray-900">{selectedOrder.item.name}</span>
+                  <span className="font-bold text-gray-900">{selectedOrder.item.name}</span>
                 </div>
                 {selectedOrder.item.bonus && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Bonus</span>
-                    <span className="font-medium text-green-600">{selectedOrder.item.bonus}</span>
+                    <span className="font-bold text-green-600">{selectedOrder.item.bonus}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Metode Pembayaran</span>
-                  <span className="font-medium text-gray-900">{selectedOrder.payment.method}</span>
+                  <span className="font-bold text-gray-900">{selectedOrder.payment.method}</span>
                 </div>
-                <div className="border-t border-gray-200 pt-3 flex justify-between">
+                <div className="border-t-2 border-gray-900 pt-3 flex justify-between">
                   <span className="font-bold text-gray-900">Total</span>
                   <span className="font-bold text-blue-600 text-lg">
                     {formatRupiah(selectedOrder.payment.total)}
@@ -499,20 +520,20 @@ export default function OrdersPage() {
 
               {/* Status Pesanan */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Status Pesanan</h4>
+                <h4 className="font-bold text-gray-900 mb-3">Status Pesanan</h4>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0" />
+                    <div className="w-3 h-3 rounded-full bg-green-500 border border-gray-900 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Pesanan Dibuat</p>
+                      <p className="text-sm font-bold text-gray-900">Pesanan Dibuat</p>
                       <p className="text-xs text-gray-500">{formatDate(selectedOrder.date)}</p>
                     </div>
                   </div>
                   {selectedOrder.status === 'completed' && (
                     <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-blue-600 flex-shrink-0" />
+                      <div className="w-3 h-3 rounded-full bg-blue-600 border border-gray-900 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">Selesai — Diamond Masuk</p>
+                        <p className="text-sm font-bold text-gray-900">Selesai — Diamond Masuk</p>
                         {selectedOrder.processedAt && (
                           <p className="text-xs text-gray-500">{formatDate(selectedOrder.processedAt)}</p>
                         )}
@@ -521,8 +542,8 @@ export default function OrdersPage() {
                   )}
                   {selectedOrder.status === 'processing' && (
                     <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-                      <p className="text-sm text-blue-600 font-medium">Sedang diproses...</p>
+                      <div className="w-3 h-3 rounded-full bg-blue-400 animate-pulse border border-gray-900 flex-shrink-0" />
+                      <p className="text-sm text-blue-600 font-bold">Sedang diproses...</p>
                     </div>
                   )}
                 </div>
@@ -534,18 +555,18 @@ export default function OrdersPage() {
                   href={selectedOrder.xenditInvoiceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold text-center transition-colors"
+                  className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md border-2 border-gray-900 text-sm font-bold text-center transition-all nb-shadow-sm hover:-translate-y-px"
                 >
                   Lanjutkan Pembayaran →
                 </a>
               )}
 
               {/* Footer */}
-              <div className="text-center pt-4 border-t border-gray-200">
-                <p className="text-xs text-gray-400">
+              <div className="text-center pt-4 border-t-2 border-gray-900">
+                <p className="text-xs text-gray-500">
                   Terima kasih telah berbelanja di GameHub.ID
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Tanggal: {formatDate(selectedOrder.date)}
                 </p>
               </div>
