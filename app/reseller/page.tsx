@@ -223,10 +223,11 @@ export default function ResellerPage() {
     try {
       const banks = await bankAccountApi.getAll()
       setBankAccounts(banks)
-      // Auto-select primary or first bank
-      const primary = banks.find(b => b.is_primary)
+      // Auto-select verified primary, then any verified bank
+      const verifiedBanks = banks.filter(b => b.is_verified !== false)
+      const primary = verifiedBanks.find(b => b.is_primary) || verifiedBanks[0]
       if (primary) setSelectedBankId(primary.id)
-      else if (banks.length > 0) setSelectedBankId(banks[0].id)
+      else setSelectedBankId(null)
     } catch (err) {
       console.error('Fetch bank accounts error:', err)
     }
@@ -1320,16 +1321,31 @@ export default function ResellerPage() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {bankAccounts.map(bank => (
-                        <div key={bank.id} className={`relative border-2 rounded-xl p-4 transition-all ${bank.is_primary ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
-                          {bank.is_primary && (
-                            <span className="absolute top-2 right-2 bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Utama</span>
-                          )}
+                        <div key={bank.id} className={`relative border-2 rounded-xl p-4 transition-all ${
+                          bank.is_primary ? 'border-purple-500 bg-purple-50' :
+                          bank.is_verified === false ? 'border-orange-300 bg-orange-50' :
+                          'border-gray-200 bg-gray-50'
+                        }`}>
+                          <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                            {bank.is_primary && (
+                              <span className="bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Utama</span>
+                            )}
+                            {bank.is_verified === true && (
+                              <span className="bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">✓ Terverifikasi</span>
+                            )}
+                            {bank.is_verified === false && (
+                              <span className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">⏳ Menunggu Verif</span>
+                            )}
+                          </div>
                           <p className="text-xs font-black text-gray-900 uppercase">{bank.nama_bank}</p>
                           <p className="text-sm font-bold text-gray-700 mt-1">{bank.nomor_rekening}</p>
                           <p className="text-xs text-gray-500">{bank.nama_pemilik}</p>
                           <p className="text-[10px] text-gray-400 capitalize">{bank.tipe}</p>
+                          {bank.is_verified === false && (
+                            <p className="text-[10px] text-orange-600 font-bold mt-1">Rekening belum diverifikasi admin. Tidak bisa digunakan untuk penarikan.</p>
+                          )}
                           <div className="mt-3 flex gap-2">
-                            {!bank.is_primary && (
+                            {!bank.is_primary && bank.is_verified !== false && (
                               <button
                                 onClick={() => handleSetPrimaryBank(bank.id)}
                                 className="text-[10px] font-bold text-purple-600 hover:underline"
@@ -1471,23 +1487,37 @@ export default function ResellerPage() {
                   {/* Pilih Rekening */}
                   <div>
                     <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Rekening Tujuan</label>
-                    {bankAccounts.length > 0 ? (
-                      <select
-                        value={selectedBankId || ''}
-                        onChange={(e) => setSelectedBankId(Number(e.target.value))}
-                        className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none"
-                      >
-                        {bankAccounts.map(bank => (
-                          <option key={bank.id} value={bank.id}>
-                            {bank.nama_bank} - {bank.nomor_rekening} ({bank.nama_pemilik}){bank.is_primary ? ' ★' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="text-center py-3 bg-orange-50 border-2 border-orange-200 rounded-xl">
-                        <p className="text-xs font-bold text-orange-700">Belum ada rekening tersimpan</p>
-                      </div>
-                    )}
+                    {(() => {
+                      const verifiedBanks = bankAccounts.filter(b => b.is_verified !== false)
+                      if (bankAccounts.length === 0) {
+                        return (
+                          <div className="text-center py-3 bg-orange-50 border-2 border-orange-200 rounded-xl">
+                            <p className="text-xs font-bold text-orange-700">Belum ada rekening tersimpan</p>
+                          </div>
+                        )
+                      }
+                      if (verifiedBanks.length === 0) {
+                        return (
+                          <div className="py-3 bg-orange-50 border-2 border-orange-300 rounded-xl px-3">
+                            <p className="text-xs font-bold text-orange-700">⏳ Semua rekening menunggu verifikasi admin</p>
+                            <p className="text-[10px] text-orange-600 mt-0.5">Tunggu verifikasi sebelum melakukan penarikan</p>
+                          </div>
+                        )
+                      }
+                      return (
+                        <select
+                          value={selectedBankId || ''}
+                          onChange={(e) => setSelectedBankId(Number(e.target.value))}
+                          className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                        >
+                          {verifiedBanks.map(bank => (
+                            <option key={bank.id} value={bank.id}>
+                              {bank.nama_bank} - {bank.nomor_rekening} ({bank.nama_pemilik}){bank.is_primary ? ' ★' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )
+                    })()}
                     <button
                       type="button"
                       onClick={() => setShowAddBankModal(true)}
