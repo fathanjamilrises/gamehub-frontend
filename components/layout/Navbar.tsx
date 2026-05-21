@@ -23,6 +23,20 @@ export default function Navbar() {
     }
   }, [isAuthenticated])
 
+  useEffect(() => {
+    const handleOpenAuthModal = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tab?: 'login' | 'daftar' }>
+      setModalTab(customEvent.detail?.tab === 'daftar' ? 'daftar' : 'login')
+      setModalOpen(true)
+    }
+
+    window.addEventListener('open-auth-modal', handleOpenAuthModal)
+
+    return () => {
+      window.removeEventListener('open-auth-modal', handleOpenAuthModal)
+    }
+  }, [])
+
   const openLogin = () => { setModalTab('login'); setModalOpen(true) }
   const openDaftar = () => { setModalTab('daftar'); setModalOpen(true) }
 
@@ -71,9 +85,6 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-8">
             <Link href="/topup" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
               Top Up
-            </Link>
-            <Link href="/vouchers" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-              Voucher
             </Link>
             {(!isAuthenticated || user?.role === 'user') && (
               <Link href="/accounts" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">

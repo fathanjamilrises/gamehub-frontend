@@ -24,24 +24,14 @@ export default function AkunCheckoutPage() {
   const slug = params?.slug as string
   const router = useRouter()
   const { toast } = useToast()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
   
   const [listing, setListing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [catatan, setCatatan] = useState('')
 
-  // Guard: user harus login untuk checkout
   useEffect(() => {
-    if (authLoading) return
-    if (!isAuthenticated) {
-      toast('Silakan login terlebih dahulu untuk melakukan checkout', 'error')
-      router.push('/')
-    }
-  }, [authLoading, isAuthenticated, router, toast])
-
-  useEffect(() => {
-    if (!slug || authLoading || !isAuthenticated) return
+    if (!slug) return
     const fetchDetail = async () => {
       setLoading(true)
       try {
@@ -61,7 +51,7 @@ export default function AkunCheckoutPage() {
       }
     }
     fetchDetail()
-  }, [slug, router, toast, authLoading, isAuthenticated])
+  }, [slug, router, toast])
 
   const handleCheckout = async () => {
     if (!listing) return
