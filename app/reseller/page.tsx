@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/lib/contexts/ToastContext'
 import { authFetch } from '@/lib/authApi'
 import { orderAkunApi } from '@/lib/orderAkunApi'
+import { walletApi, WalletInfo, WalletTransaction, WalletStats } from '@/lib/walletApi'
+import { bankAccountApi, withdrawApi, BankAccount, WithdrawRecord } from '@/lib/withdrawApi'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -58,12 +60,37 @@ export default function ResellerPage() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [saldo, setSaldo] = useState(0)
   
+  // State Wallet
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
+  const [walletStats, setWalletStats] = useState<WalletStats | null>(null)
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([])
+  const [walletTxPage, setWalletTxPage] = useState(1)
+  const [walletTxTotalPages, setWalletTxTotalPages] = useState(1)
+  const [walletTxFilter, setWalletTxFilter] = useState('')
+  const [walletLoading, setWalletLoading] = useState(false)
+
   // State Modal Penarikan
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
-  const [withdrawBank, setWithdrawBank] = useState('BCA')
-  const [withdrawNoRek, setWithdrawNoRek] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawNote, setWithdrawNote] = useState('')
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
   const [withdrawHistory, setWithdrawHistory] = useState<any[]>([])
+
+  // State Bank Accounts & Withdraw Records
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const [selectedBankId, setSelectedBankId] = useState<number | null>(null)
+  const [withdrawRecords, setWithdrawRecords] = useState<WithdrawRecord[]>([])
+  const [withdrawRecordsPage, setWithdrawRecordsPage] = useState(1)
+  const [withdrawRecordsTotalPages, setWithdrawRecordsTotalPages] = useState(1)
+  const [withdrawRecordsLoading, setWithdrawRecordsLoading] = useState(false)
+  // State Modal Tambah Rekening
+  const [showAddBankModal, setShowAddBankModal] = useState(false)
+  const [newBankNama, setNewBankNama] = useState('')
+  const [newBankTipe, setNewBankTipe] = useState('bank')
+  const [newBankNomor, setNewBankNomor] = useState('')
+  const [newBankPemilik, setNewBankPemilik] = useState('')
+  const [newBankKode, setNewBankKode] = useState('')
+  const [addingBank, setAddingBank] = useState(false)
 
   // Cek status reseller dan mode demo
   useEffect(() => {
@@ -141,18 +168,81 @@ export default function ResellerPage() {
     }
   }
 
-  // Fetch seller orders for stats/saldo
+  // Fetch seller orders for stats
   const fetchSellerOrders = async () => {
     try {
       const data = (await orderAkunApi.getSellerOrders()) as any
       const orders = Array.isArray(data) ? data : (data.orders || data.data || [])
       setSellerOrders(orders)
-      // Compute saldo from completed/confirmed orders
-      const completedOrders = orders.filter((o: any) => ['confirmed', 'completed'].includes(o.status?.toLowerCase()))
-      const totalSaldo = completedOrders.reduce((acc: number, o: any) => acc + Number(o.harga || o.total_bayar || 0), 0)
-      setSaldo(totalSaldo)
     } catch (err) {
       console.error('Fetch seller orders error:', err)
+    }
+  }
+
+  // Fetch wallet data from /api/wallet endpoints
+  const fetchWalletInfo = async () => {
+    try {
+      const info = await walletApi.getInfo()
+      setWalletInfo(info)
+      setSaldo(info.saldo || 0)
+    } catch (err) {
+      console.error('Fetch wallet info error:', err)
+      // Fallback: compute saldo from seller orders if wallet API fails
+      if (sellerOrders.length > 0) {
+        const completedOrders = sellerOrders.filter((o: any) => ['confirmed', 'completed'].includes(o.status?.toLowerCase()))
+        const totalSaldo = completedOrders.reduce((acc: number, o: any) => acc + Number(o.harga || o.total_bayar || 0), 0)
+        setSaldo(totalSaldo)
+      }
+    }
+  }
+
+  const fetchWalletStats = async () => {
+    try {
+      const stats = await walletApi.getStats()
+      setWalletStats(stats)
+    } catch (err) {
+      console.error('Fetch wallet stats error:', err)
+    }
+  }
+
+  const fetchWalletTransactions = async (page = 1, tipe = '') => {
+    setWalletLoading(true)
+    try {
+      const res = await walletApi.getTransactions({ page, tipe: tipe || undefined })
+      setWalletTransactions(res.transactions)
+      setWalletTxPage(res.page)
+      setWalletTxTotalPages(res.total_pages)
+    } catch (err) {
+      console.error('Fetch wallet transactions error:', err)
+    } finally {
+      setWalletLoading(false)
+    }
+  }
+
+  const fetchBankAccounts = async () => {
+    try {
+      const banks = await bankAccountApi.getAll()
+      setBankAccounts(banks)
+      // Auto-select primary or first bank
+      const primary = banks.find(b => b.is_primary)
+      if (primary) setSelectedBankId(primary.id)
+      else if (banks.length > 0) setSelectedBankId(banks[0].id)
+    } catch (err) {
+      console.error('Fetch bank accounts error:', err)
+    }
+  }
+
+  const fetchWithdrawRecords = async (page = 1) => {
+    setWithdrawRecordsLoading(true)
+    try {
+      const res = await withdrawApi.getHistory({ page, limit: 10 })
+      setWithdrawRecords(res.withdrawals)
+      setWithdrawRecordsPage(res.page)
+      setWithdrawRecordsTotalPages(res.total_pages)
+    } catch (err) {
+      console.error('Fetch withdraw records error:', err)
+    } finally {
+      setWithdrawRecordsLoading(false)
     }
   }
 
@@ -177,6 +267,11 @@ export default function ResellerPage() {
       } else {
         fetchMyAccounts()
         fetchSellerOrders()
+        fetchWalletInfo()
+        fetchWalletStats()
+        fetchWalletTransactions()
+        fetchBankAccounts()
+        fetchWithdrawRecords()
       }
     }
   }, [status])
@@ -440,29 +535,33 @@ export default function ResellerPage() {
       return
     }
 
+    setWithdrawSubmitting(true)
+
     if (!isDemo) {
-      // Coba panggil backend withdraw endpoint
+      if (!selectedBankId) {
+        showError('Pilih rekening tujuan terlebih dahulu. Tambahkan rekening jika belum ada.')
+        setWithdrawSubmitting(false)
+        return
+      }
       try {
-        const res = await authFetch('/api-proxy/resellers/withdraw', {
-          method: 'POST',
-          body: JSON.stringify({
-            bank: withdrawBank,
-            no_rekening: withdrawNoRek,
-            amount: amountNum,
-          }),
+        await withdrawApi.request({
+          id_bank_account: selectedBankId,
+          jumlah: amountNum,
+          catatan_reseller: withdrawNote.trim() || undefined,
         })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.message || 'Gagal melakukan penarikan')
-        }
-        showSuccess('💸 Penarikan dana berhasil diproses!')
-        fetchSellerOrders() // Refresh saldo
+        showSuccess('💸 Penarikan dana berhasil diajukan!')
+        fetchWalletInfo()
+        fetchWalletTransactions(1, walletTxFilter)
+        fetchWithdrawRecords()
       } catch (err: any) {
-        showError(err.message || 'Fitur penarikan sedang dalam pengembangan. Hubungi admin untuk penarikan manual.')
+        showError(err.message || 'Gagal mengajukan penarikan. Coba lagi nanti.')
+        setWithdrawSubmitting(false)
+        return
       }
       setShowWithdrawModal(false)
       setWithdrawAmount('')
-      setWithdrawNoRek('')
+      setWithdrawNote('')
+      setWithdrawSubmitting(false)
       return
     }
 
@@ -473,8 +572,8 @@ export default function ResellerPage() {
 
     const newTx = {
       id: Date.now(),
-      bank: withdrawBank,
-      noRek: withdrawNoRek,
+      bank: 'Demo Bank',
+      noRek: '000000',
       amount: amountNum,
       date: 'Hari ini',
       status: 'Berhasil'
@@ -482,8 +581,73 @@ export default function ResellerPage() {
     setWithdrawHistory([newTx, ...withdrawHistory])
     setShowWithdrawModal(false)
     setWithdrawAmount('')
-    setWithdrawNoRek('')
+    setWithdrawNote('')
+    setWithdrawSubmitting(false)
     showSuccess('💸 [DEMO] Penarikan dana berhasil diproses!')
+  }
+
+  const handleAddBank = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!newBankNama.trim() || !newBankNomor.trim() || !newBankPemilik.trim()) {
+      showError('Semua field wajib diisi')
+      return
+    }
+    setAddingBank(true)
+    try {
+      await bankAccountApi.create({
+        nama_bank: newBankNama.trim(),
+        tipe: newBankTipe,
+        nomor_rekening: newBankNomor.trim(),
+        nama_pemilik: newBankPemilik.trim(),
+        kode_bank: newBankKode.trim() || undefined,
+        is_primary: bankAccounts.length === 0,
+      })
+      showSuccess('✅ Rekening berhasil ditambahkan!')
+      setShowAddBankModal(false)
+      setNewBankNama('')
+      setNewBankTipe('bank')
+      setNewBankNomor('')
+      setNewBankPemilik('')
+      setNewBankKode('')
+      fetchBankAccounts()
+    } catch (err: any) {
+      showError(err.message || 'Gagal menambahkan rekening')
+    } finally {
+      setAddingBank(false)
+    }
+  }
+
+  const handleDeleteBank = async (bankId: number) => {
+    if (!confirm('Hapus rekening ini?')) return
+    try {
+      await bankAccountApi.delete(bankId)
+      showSuccess('Rekening dihapus')
+      fetchBankAccounts()
+    } catch (err: any) {
+      showError(err.message || 'Gagal menghapus rekening')
+    }
+  }
+
+  const handleSetPrimaryBank = async (bankId: number) => {
+    try {
+      await bankAccountApi.setPrimary(bankId)
+      showSuccess('Rekening utama diperbarui')
+      fetchBankAccounts()
+    } catch (err: any) {
+      showError(err.message || 'Gagal mengatur rekening utama')
+    }
+  }
+
+  const handleCancelWithdraw = async (withdrawId: number) => {
+    if (!confirm('Batalkan penarikan ini?')) return
+    try {
+      await withdrawApi.cancel(withdrawId)
+      showSuccess('Penarikan dibatalkan, saldo dikembalikan')
+      fetchWithdrawRecords(withdrawRecordsPage)
+      fetchWalletInfo()
+    } catch (err: any) {
+      showError(err.message || 'Gagal membatalkan penarikan')
+    }
   }
 
   // Filter akun untuk tab Accounts
@@ -621,8 +785,24 @@ export default function ResellerPage() {
                   <p className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight truncate">
                     Rp {saldo.toLocaleString('id-ID')}
                   </p>
+                  {walletInfo && (walletInfo.saldo_tertahan > 0 || walletInfo.saldo_proses_withdraw > 0) && (
+                    <div className="mt-1 space-y-0.5">
+                      {walletInfo.saldo_tertahan > 0 && (
+                        <p className="text-[10px] font-bold text-orange-600">
+                          Ditahan: Rp {walletInfo.saldo_tertahan.toLocaleString('id-ID')}
+                        </p>
+                      )}
+                      {walletInfo.saldo_proses_withdraw > 0 && (
+                        <p className="text-[10px] font-bold text-blue-600">
+                          Proses WD: Rp {walletInfo.saldo_proses_withdraw.toLocaleString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-4 pt-3 border-t-2 border-dashed border-gray-200 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-gray-500">Cair instan 24/7</span>
+                    <span className="text-[10px] font-bold text-gray-500">
+                      {walletInfo ? `Pendapatan: Rp ${(walletInfo.total_pendapatan || 0).toLocaleString('id-ID')}` : 'Cair instan 24/7'}
+                    </span>
                     <button 
                       onClick={() => setShowWithdrawModal(true)}
                       className="text-xs font-black text-blue-600 hover:underline flex items-center gap-1"
@@ -692,6 +872,21 @@ export default function ResellerPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Pendapatan Bulan Ini (dari wallet stats / info) */}
+              {(walletStats || walletInfo) && !isDemo && (
+                <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 shadow-[4px_4px_0px_#111827] flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Pendapatan Bulan Ini</p>
+                    <p className="text-2xl font-black text-green-600">Rp {(
+                      walletStats?.pendapatan_bulan_ini || walletInfo?.total_pendapatan || 0
+                    ).toLocaleString('id-ID')}</p>
+                  </div>
+                  <div className="w-14 h-14 bg-green-100 border-[3px] border-gray-900 rounded-2xl flex items-center justify-center shadow-[2px_2px_0px_#111827]">
+                    <span className="text-2xl">📈</span>
+                  </div>
+                </div>
+              )}
 
               {/* Seksi Analytics & Info Pintar */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -919,50 +1114,337 @@ export default function ResellerPage() {
 
           {/* ── KONTEN TAB: WITHDRAW ── */}
           {activeTab === 'withdraw' && (
-            <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-6 shadow-[5px_5px_0px_#111827] animate-fadeIn">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">Riwayat Penarikan Dana</h3>
-                  <p className="text-xs font-bold text-gray-500">Semua riwayat transfer ke rekening atau e-walletmu</p>
+            <div className="space-y-6 animate-fadeIn">
+              {/* Ringkasan Wallet */}
+              {walletInfo && !isDemo && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 shadow-[4px_4px_0px_#111827]">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Tersedia</p>
+                    <p className="text-xl font-black text-green-600">Rp {(walletInfo.saldo || 0).toLocaleString('id-ID')}</p>
+                  </div>
+                  <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 shadow-[4px_4px_0px_#111827]">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Pendapatan</p>
+                    <p className="text-xl font-black text-blue-600">Rp {(walletInfo.total_pendapatan || 0).toLocaleString('id-ID')}</p>
+                  </div>
+                  <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 shadow-[4px_4px_0px_#111827]">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Penarikan</p>
+                    <p className="text-xl font-black text-purple-600">Rp {(walletInfo.total_penarikan || 0).toLocaleString('id-ID')}</p>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="bg-blue-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border-2 border-gray-900 shadow-[2px_2px_0px_#111827] uppercase tracking-wider self-start sm:self-auto"
-                >
-                  ➕ Ajukan Penarikan
-                </button>
+              )}
+
+              {/* Grafik Pendapatan */}
+              {walletStats?.grafik_pendapatan && walletStats.grafik_pendapatan.length > 0 && !isDemo && (
+                <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-6 shadow-[5px_5px_0px_#111827]">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Grafik Pendapatan</h4>
+                  <div className="flex items-end gap-2 h-32">
+                    {walletStats.grafik_pendapatan.map((item, i) => {
+                      const maxVal = Math.max(...walletStats.grafik_pendapatan.map(g => g.jumlah), 1)
+                      const heightPct = Math.max(4, (item.jumlah / maxVal) * 100)
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[9px] font-bold text-gray-500">
+                            {item.jumlah > 0 ? `${(item.jumlah / 1000).toFixed(0)}k` : '0'}
+                          </span>
+                          <div
+                            className="w-full bg-purple-500 border-2 border-gray-900 rounded-t-md transition-all"
+                            style={{ height: `${heightPct}%` }}
+                          />
+                          <span className="text-[8px] font-bold text-gray-400 truncate w-full text-center">{item.label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabel Riwayat Transaksi */}
+              <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-6 shadow-[5px_5px_0px_#111827]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">Riwayat Transaksi Wallet</h3>
+                    <p className="text-xs font-bold text-gray-500">Semua riwayat transaksi e-wallet reseller</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isDemo && (
+                      <select
+                        value={walletTxFilter}
+                        onChange={(e) => {
+                          setWalletTxFilter(e.target.value)
+                          fetchWalletTransactions(1, e.target.value)
+                        }}
+                        className="px-3 py-2 bg-white border-2 border-gray-900 rounded-xl text-xs font-black uppercase tracking-wider focus:outline-none cursor-pointer"
+                      >
+                        <option value="">Semua Tipe</option>
+                        <option value="masuk">Masuk</option>
+                        <option value="keluar">Keluar</option>
+                        <option value="penarikan">Penarikan</option>
+                        <option value="penjualan">Penjualan</option>
+                      </select>
+                    )}
+                    <button
+                      onClick={() => setShowWithdrawModal(true)}
+                      className="bg-blue-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border-2 border-gray-900 shadow-[2px_2px_0px_#111827] uppercase tracking-wider"
+                    >
+                      💳 Tarik Dana
+                    </button>
+                  </div>
+                </div>
+
+                {walletLoading ? (
+                  <div className="py-12 flex items-center justify-center">
+                    <div className="w-8 h-8 border-[3px] border-gray-900 border-t-purple-600 rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border-2 border-gray-900 rounded-xl">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b-2 border-gray-900 bg-gray-50">
+                          <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Tanggal</th>
+                          <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Tipe</th>
+                          <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Keterangan</th>
+                          <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Jumlah</th>
+                          <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 font-bold text-xs text-gray-700">
+                        {/* Real transactions from API */}
+                        {!isDemo && walletTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-purple-50/50 transition-colors">
+                            <td className="p-3 whitespace-nowrap">
+                              {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                tx.tipe === 'masuk' || tx.tipe === 'penjualan' ? 'bg-green-100 text-green-700' :
+                                tx.tipe === 'penarikan' || tx.tipe === 'keluar' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {tx.tipe}
+                              </span>
+                            </td>
+                            <td className="p-3 max-w-[200px] truncate text-gray-600">{tx.keterangan}</td>
+                            <td className={`p-3 font-black ${
+                              tx.tipe === 'masuk' || tx.tipe === 'penjualan' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {tx.tipe === 'masuk' || tx.tipe === 'penjualan' ? '+' : '-'}Rp {Math.abs(tx.jumlah).toLocaleString('id-ID')}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border border-gray-900 shadow-sm ${
+                                tx.status === 'berhasil' ? 'bg-green-400 text-gray-900' :
+                                tx.status === 'pending' ? 'bg-[#ffc900] text-gray-900' :
+                                'bg-red-400 text-white'
+                              }`}>
+                                {tx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Demo mode: show local withdrawHistory */}
+                        {isDemo && withdrawHistory.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-purple-50/50 transition-colors">
+                            <td className="p-3 whitespace-nowrap">{tx.date}</td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-red-100 text-red-700">penarikan</span>
+                            </td>
+                            <td className="p-3 text-gray-600">{tx.bank} - {tx.noRek}</td>
+                            <td className="p-3 font-black text-red-600">-Rp {tx.amount.toLocaleString('id-ID')}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border border-gray-900 shadow-sm ${
+                                tx.status === 'Berhasil' ? 'bg-green-400 text-gray-900' : 'bg-[#ffc900] text-gray-900'
+                              }`}>
+                                {tx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Empty state */}
+                        {((!isDemo && walletTransactions.length === 0) || (isDemo && withdrawHistory.length === 0)) && (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">
+                              Belum ada riwayat transaksi
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {!isDemo && walletTxTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <button
+                      disabled={walletTxPage <= 1}
+                      onClick={() => fetchWalletTransactions(walletTxPage - 1, walletTxFilter)}
+                      className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="text-xs font-black text-gray-600">
+                      {walletTxPage} / {walletTxTotalPages}
+                    </span>
+                    <button
+                      disabled={walletTxPage >= walletTxTotalPages}
+                      onClick={() => fetchWalletTransactions(walletTxPage + 1, walletTxFilter)}
+                      className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="overflow-x-auto border-2 border-gray-900 rounded-xl">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-gray-900 bg-gray-50">
-                      <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Tanggal</th>
-                      <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Tujuan Transfer</th>
-                      <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">No. Rek / Akun</th>
-                      <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Jumlah Ditarik</th>
-                      <th className="p-3 text-xs font-black text-gray-900 uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 font-bold text-xs text-gray-700">
-                    {withdrawHistory.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-purple-50/50 transition-colors">
-                        <td className="p-3 whitespace-nowrap">{tx.date}</td>
-                        <td className="p-3 font-black text-gray-900">{tx.bank}</td>
-                        <td className="p-3 font-mono text-gray-600">{tx.noRek}</td>
-                        <td className="p-3 font-black text-green-600">Rp {tx.amount.toLocaleString('id-ID')}</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border border-gray-900 shadow-sm ${
-                            tx.status === 'Berhasil' ? 'bg-green-400 text-gray-900' : 'bg-[#ffc900] text-gray-900'
-                          }`}>
-                            {tx.status}
+              {/* Rekening Bank Tersimpan */}
+              {!isDemo && (
+                <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-6 shadow-[5px_5px_0px_#111827]">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">Rekening Tersimpan</h3>
+                      <p className="text-xs font-bold text-gray-500">Kelola rekening bank / e-wallet untuk penarikan</p>
+                    </div>
+                    <button
+                      onClick={() => setShowAddBankModal(true)}
+                      className="bg-purple-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border-2 border-gray-900 shadow-[2px_2px_0px_#111827] uppercase tracking-wider"
+                    >
+                      + Tambah
+                    </button>
+                  </div>
+
+                  {bankAccounts.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-3xl mb-2">🏦</p>
+                      <p className="text-sm font-bold text-gray-500">Belum ada rekening tersimpan</p>
+                      <p className="text-xs text-gray-400 mt-1">Tambahkan rekening untuk mulai menarik dana</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {bankAccounts.map(bank => (
+                        <div key={bank.id} className={`relative border-2 rounded-xl p-4 transition-all ${bank.is_primary ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
+                          {bank.is_primary && (
+                            <span className="absolute top-2 right-2 bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Utama</span>
+                          )}
+                          <p className="text-xs font-black text-gray-900 uppercase">{bank.nama_bank}</p>
+                          <p className="text-sm font-bold text-gray-700 mt-1">{bank.nomor_rekening}</p>
+                          <p className="text-xs text-gray-500">{bank.nama_pemilik}</p>
+                          <p className="text-[10px] text-gray-400 capitalize">{bank.tipe}</p>
+                          <div className="mt-3 flex gap-2">
+                            {!bank.is_primary && (
+                              <button
+                                onClick={() => handleSetPrimaryBank(bank.id)}
+                                className="text-[10px] font-bold text-purple-600 hover:underline"
+                              >
+                                Jadikan Utama
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteBank(bank.id)}
+                              className="text-[10px] font-bold text-red-500 hover:underline"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Riwayat Penarikan Dana */}
+              {!isDemo && (
+                <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-6 shadow-[5px_5px_0px_#111827]">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-black text-gray-900 uppercase tracking-wide">Riwayat Penarikan</h3>
+                      <p className="text-xs font-bold text-gray-500">Status permintaan penarikan dana</p>
+                    </div>
+                  </div>
+
+                  {withdrawRecordsLoading ? (
+                    <div className="py-8 flex items-center justify-center">
+                      <div className="w-8 h-8 border-[3px] border-gray-900 border-t-purple-600 rounded-full animate-spin" />
+                    </div>
+                  ) : withdrawRecords.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-3xl mb-2">📋</p>
+                      <p className="text-sm font-bold text-gray-500">Belum ada riwayat penarikan</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {withdrawRecords.map(wd => (
+                        <div key={wd.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-all">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-black text-gray-900">Rp {wd.jumlah.toLocaleString('id-ID')}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {wd.bank_account ? `${wd.bank_account.nama_bank} - ${wd.bank_account.nomor_rekening}` : 'Rekening dihapus'}
+                              </p>
+                              {wd.catatan_reseller && (
+                                <p className="text-[10px] text-gray-400 mt-0.5">Catatan: {wd.catatan_reseller}</p>
+                              )}
+                              {wd.alasan_penolakan && (
+                                <p className="text-[10px] text-red-500 mt-0.5">Alasan ditolak: {wd.alasan_penolakan}</p>
+                              )}
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                {new Date(wd.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-gray-900 shadow-sm ${
+                                wd.status === 'completed' ? 'bg-green-400 text-gray-900' :
+                                wd.status === 'approved' || wd.status === 'processing' ? 'bg-blue-400 text-white' :
+                                wd.status === 'pending' ? 'bg-[#ffc900] text-gray-900' :
+                                wd.status === 'rejected' ? 'bg-red-400 text-white' :
+                                wd.status === 'cancelled' ? 'bg-gray-300 text-gray-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {wd.status === 'completed' ? 'Selesai' :
+                                 wd.status === 'approved' ? 'Disetujui' :
+                                 wd.status === 'processing' ? 'Diproses' :
+                                 wd.status === 'pending' ? 'Menunggu' :
+                                 wd.status === 'rejected' ? 'Ditolak' :
+                                 wd.status === 'cancelled' ? 'Dibatalkan' : wd.status}
+                              </span>
+                              {wd.status === 'pending' && (
+                                <button
+                                  onClick={() => handleCancelWithdraw(wd.id)}
+                                  className="text-[10px] font-bold text-red-500 hover:underline"
+                                >
+                                  Batalkan
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Pagination */}
+                      {withdrawRecordsTotalPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-2">
+                          <button
+                            disabled={withdrawRecordsPage <= 1}
+                            onClick={() => fetchWithdrawRecords(withdrawRecordsPage - 1)}
+                            className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black disabled:opacity-40 hover:bg-gray-50"
+                          >
+                            ← Prev
+                          </button>
+                          <span className="text-xs font-black text-gray-600">
+                            {withdrawRecordsPage} / {withdrawRecordsTotalPages}
                           </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <button
+                            disabled={withdrawRecordsPage >= withdrawRecordsTotalPages}
+                            onClick={() => fetchWithdrawRecords(withdrawRecordsPage + 1)}
+                            className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black disabled:opacity-40 hover:bg-gray-50"
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -970,7 +1452,6 @@ export default function ResellerPage() {
           {showWithdrawModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
               <div className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827] animate-fadeIn">
-                {/* Header Modal */}
                 <div className="bg-blue-600 p-4 text-white flex items-center justify-between border-b-[3px] border-gray-900">
                   <h3 className="font-black text-sm uppercase tracking-wider">Tarik Pendapatan Reseller</h3>
                   <button 
@@ -981,42 +1462,42 @@ export default function ResellerPage() {
                   </button>
                 </div>
 
-                {/* Form Modal */}
                 <form onSubmit={handleWithdrawSubmit} className="p-6 space-y-4">
                   <div className="bg-gray-50 p-3 rounded-xl border-2 border-gray-900">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Saldo Siap Tarik</label>
                     <p className="text-xl font-black text-green-600">Rp {saldo.toLocaleString('id-ID')}</p>
                   </div>
 
+                  {/* Pilih Rekening */}
                   <div>
-                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Bank / E-Wallet Tujuan</label>
-                    <select
-                      value={withdrawBank}
-                      onChange={(e) => setWithdrawBank(e.target.value)}
-                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Rekening Tujuan</label>
+                    {bankAccounts.length > 0 ? (
+                      <select
+                        value={selectedBankId || ''}
+                        onChange={(e) => setSelectedBankId(Number(e.target.value))}
+                        className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                      >
+                        {bankAccounts.map(bank => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.nama_bank} - {bank.nomor_rekening} ({bank.nama_pemilik}){bank.is_primary ? ' ★' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="text-center py-3 bg-orange-50 border-2 border-orange-200 rounded-xl">
+                        <p className="text-xs font-bold text-orange-700">Belum ada rekening tersimpan</p>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowAddBankModal(true)}
+                      className="mt-2 text-xs font-bold text-blue-600 hover:underline"
                     >
-                      <option value="BCA">Transfer Bank BCA</option>
-                      <option value="Mandiri">Transfer Bank Mandiri</option>
-                      <option value="BNI">Transfer Bank BNI</option>
-                      <option value="BRI">Transfer Bank BRI</option>
-                      <option value="DANA">E-Wallet DANA</option>
-                      <option value="Gopay">E-Wallet GoPay</option>
-                      <option value="OVO">E-Wallet OVO</option>
-                    </select>
+                      + Tambah Rekening Baru
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Nomor Rekening / HP</label>
-                    <input
-                      type="text"
-                      value={withdrawNoRek}
-                      onChange={(e) => setWithdrawNoRek(e.target.value)}
-                      placeholder="Contoh: 08123456789 atau 8832111"
-                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
-                      required
-                    />
-                  </div>
-
+                  {/* Jumlah */}
                   <div>
                     <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Jumlah Penarikan (Rp)</label>
                     <input
@@ -1032,6 +1513,18 @@ export default function ResellerPage() {
                     />
                   </div>
 
+                  {/* Catatan */}
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Catatan (Opsional)</label>
+                    <input
+                      type="text"
+                      value={withdrawNote}
+                      onChange={(e) => setWithdrawNote(e.target.value)}
+                      placeholder="Catatan untuk admin"
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
+                    />
+                  </div>
+
                   <div className="pt-3 flex gap-3">
                     <button
                       type="button"
@@ -1042,9 +1535,115 @@ export default function ResellerPage() {
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-[#ffc900] text-gray-900 font-black text-xs py-3 rounded-xl border-2 border-gray-900 uppercase tracking-wider shadow-[3px_3px_0px_#111827] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0px_#111827] transition-all"
+                      disabled={withdrawSubmitting || !selectedBankId}
+                      className="flex-1 bg-[#ffc900] text-gray-900 font-black text-xs py-3 rounded-xl border-2 border-gray-900 uppercase tracking-wider shadow-[3px_3px_0px_#111827] hover:shadow-[1px_1px_0px_#111827] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Cairkan Dana
+                      {withdrawSubmitting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                          Memproses...
+                        </span>
+                      ) : 'Cairkan Dana'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Tambah Rekening */}
+          {showAddBankModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <div className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827] animate-fadeIn">
+                <div className="bg-purple-600 p-4 text-white flex items-center justify-between border-b-[3px] border-gray-900">
+                  <h3 className="font-black text-sm uppercase tracking-wider">Tambah Rekening</h3>
+                  <button 
+                    onClick={() => setShowAddBankModal(false)}
+                    className="w-8 h-8 bg-white text-gray-900 font-black rounded-lg border-2 border-gray-900 flex items-center justify-center shadow-sm hover:bg-gray-100"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddBank} className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Tipe</label>
+                    <select
+                      value={newBankTipe}
+                      onChange={(e) => setNewBankTipe(e.target.value)}
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none"
+                    >
+                      <option value="bank">Bank Transfer</option>
+                      <option value="ewallet">E-Wallet</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Nama Bank / E-Wallet</label>
+                    <input
+                      type="text"
+                      value={newBankNama}
+                      onChange={(e) => setNewBankNama(e.target.value)}
+                      placeholder="Contoh: BCA, Mandiri, DANA, GoPay"
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Nomor Rekening / HP</label>
+                    <input
+                      type="text"
+                      value={newBankNomor}
+                      onChange={(e) => setNewBankNomor(e.target.value)}
+                      placeholder="Contoh: 1234567890"
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Nama Pemilik</label>
+                    <input
+                      type="text"
+                      value={newBankPemilik}
+                      onChange={(e) => setNewBankPemilik(e.target.value)}
+                      placeholder="Nama sesuai rekening"
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-gray-900 uppercase tracking-widest mb-1">Kode Bank (Opsional)</label>
+                    <input
+                      type="text"
+                      value={newBankKode}
+                      onChange={(e) => setNewBankKode(e.target.value)}
+                      placeholder="Contoh: 014 (BCA)"
+                      className="w-full border-[3px] border-gray-900 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-50 focus:bg-white focus:outline-none placeholder:text-gray-400"
+                    />
+                  </div>
+
+                  <div className="pt-3 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddBankModal(false)}
+                      className="flex-1 bg-gray-100 text-gray-800 font-black text-xs py-3 rounded-xl border-2 border-gray-900 uppercase tracking-wider hover:bg-gray-200"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addingBank}
+                      className="flex-1 bg-purple-600 text-white font-black text-xs py-3 rounded-xl border-2 border-gray-900 uppercase tracking-wider shadow-[3px_3px_0px_#111827] hover:shadow-[1px_1px_0px_#111827] transition-all disabled:opacity-50"
+                    >
+                      {addingBank ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Menyimpan...
+                        </span>
+                      ) : 'Simpan Rekening'}
                     </button>
                   </div>
                 </form>

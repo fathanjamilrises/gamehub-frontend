@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, FormEvent, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
@@ -17,7 +17,7 @@ function resolveImageUrl(src?: string): string {
   return BACKEND_URL + (src.startsWith('/') ? src : '/' + src)
 }
 
-export default function JualAkunPage() {
+function JualAkunContent() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { success: showSuccess, error: showError } = useToast()
   const router = useRouter()
@@ -571,5 +571,21 @@ export default function JualAkunPage() {
       </main>
       <Footer />
     </div>
+  )
+}
+
+export default function JualAkunPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col bg-white">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="w-12 h-12 border-[3px] border-gray-900 border-t-purple-600 rounded-full animate-spin" />
+        </main>
+        <Footer />
+      </div>
+    }>
+      <JualAkunContent />
+    </Suspense>
   )
 }

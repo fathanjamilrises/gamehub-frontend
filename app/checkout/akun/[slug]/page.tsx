@@ -8,6 +8,7 @@ import Footer from '@/components/layout/Footer'
 import { authFetch } from '@/lib/authApi'
 import { orderAkunApi } from '@/lib/orderAkunApi'
 import { useToast } from '@/lib/contexts/ToastContext'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -22,14 +23,24 @@ export default function AkunCheckoutPage() {
   const slug = params?.slug as string
   const router = useRouter()
   const { toast } = useToast()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   
   const [listing, setListing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [catatan, setCatatan] = useState('')
 
+  // Guard: user harus login untuk checkout
   useEffect(() => {
-    if (!slug) return
+    if (authLoading) return
+    if (!isAuthenticated) {
+      toast('Silakan login terlebih dahulu untuk melakukan checkout', 'error')
+      router.push('/')
+    }
+  }, [authLoading, isAuthenticated, router, toast])
+
+  useEffect(() => {
+    if (!slug || authLoading || !isAuthenticated) return
     const fetchDetail = async () => {
       setLoading(true)
       try {
@@ -49,7 +60,7 @@ export default function AkunCheckoutPage() {
       }
     }
     fetchDetail()
-  }, [slug, router, toast])
+  }, [slug, router, toast, authLoading, isAuthenticated])
 
   const handleCheckout = async () => {
     if (!listing) return

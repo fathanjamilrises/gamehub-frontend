@@ -101,14 +101,14 @@ export const orderAkunApi = {
 
   // Step 2: Checkout — buat order + link bayar
   checkout: async (idListing: number, catatanPembeli?: string): Promise<CheckoutResponse> => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const frontendOrigin = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     const response = await authFetch(getBaseUrl('/checkout'), {
       method: 'POST',
       body: JSON.stringify({
         id_listing: idListing,
         catatan_pembeli: catatanPembeli,
-        success_redirect_url: `${origin}/api/payment/success`,
-        failure_redirect_url: `${origin}/my-orders`,
+        success_redirect_url: `${frontendOrigin}/api/payment/success`,
+        failure_redirect_url: `${frontendOrigin}/my-orders`,
       }),
     });
     if (!response.ok) {

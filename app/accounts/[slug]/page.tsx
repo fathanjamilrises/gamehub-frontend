@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/authApi'
 import { chatApi } from '@/lib/chatApi'
 import { useCart } from '@/lib/contexts/CartContext'
 import { useToast } from '@/lib/contexts/ToastContext'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -44,12 +45,17 @@ export default function AccountDetailPage() {
   
   const { addToCart } = useCart()
   const { toast } = useToast()
+  const { isAuthenticated } = useAuth()
   const [addingToCart, setAddingToCart] = useState(false)
   const [catatan, setCatatan] = useState('')
   const [startingChat, setStartingChat] = useState(false)
 
   const handleChat = async () => {
     if (!listing) return
+    if (!isAuthenticated) {
+      toast('Silakan login terlebih dahulu untuk chat dengan penjual', 'error')
+      return
+    }
     setStartingChat(true)
     try {
       const room = await chatApi.openRoom(listing.id)
@@ -63,6 +69,10 @@ export default function AccountDetailPage() {
 
   const handleAddToCart = async () => {
     if (!listing) return
+    if (!isAuthenticated) {
+      toast('Silakan login terlebih dahulu untuk menambahkan ke keranjang', 'error')
+      return
+    }
     
     // Listing id should be an integer
     const idListing = parseInt(listing.id)
@@ -411,13 +421,19 @@ export default function AccountDetailPage() {
                       Keranjang
                     </button>
                     {/* Beli Langsung */}
-                    <Link
-                      href={`/checkout/akun/${slug}`}
+                    <button
+                      onClick={() => {
+                        if (!isAuthenticated) {
+                          toast('Silakan login terlebih dahulu untuk membeli akun', 'error')
+                          return
+                        }
+                        router.push(`/checkout/akun/${slug}`)
+                      }}
                       className="flex-[1.5] h-12 bg-blue-600 text-white font-black text-[10px] sm:text-xs rounded-xl border-[3px] border-gray-900 shadow-[3px_3px_0px_#111827] hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_#111827] transition-all uppercase tracking-wider flex items-center justify-center gap-1.5"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                       Beli Sekarang
-                    </Link>
+                    </button>
                   </div>
 
                   {/* Trade Guard */}
