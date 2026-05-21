@@ -71,11 +71,13 @@ function AccountPaymentSuccessContent() {
         if (id && id.length >= 10) params.set('id', id)
         if (xenditId) params.set('id', xenditId)
         
-        // Panggil backend payment success endpoint (redirect: manual agar tidak follow redirect)
-        await fetch(`/api-proxy/payment/success?${params.toString()}`, { 
-          method: 'GET',
-          redirect: 'manual',
-        })
+        // Panggil backend untuk sync status pembayaran dari Xendit
+        await fetch(`/api-proxy/akun-orders/verify-payment`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ external_id: extId, xendit_id: xenditId || id }),
+        }).catch(() => {})
       } catch (e) {
         console.log('[PaymentSuccess] Verify payment call failed (non-critical):', e)
       }
@@ -130,7 +132,7 @@ function AccountPaymentSuccessContent() {
 
       if (!data) {
         pollCount++
-        if (pollCount >= 12) {
+        if (pollCount >= 6) {
           setLoading(false)
           toast('Pesanan tidak ditemukan. Cek di halaman Riwayat Pesanan.', 'error')
           return
@@ -139,27 +141,28 @@ function AccountPaymentSuccessContent() {
         return
       }
 
+      // Tampilkan nota segera saat order ditemukan
+      setOrder(data)
+      setLoading(false)
+      localStorage.removeItem('last_akun_order_id')
+      localStorage.removeItem('last_akun_order_time')
+
       const status = data.status?.toLowerCase()
-
-      // Jika status sudah bukan waiting_payment/pending, langsung tampilkan
-      if (status !== 'waiting_payment' && status !== 'pending') {
-        setOrder(data)
-        setLoading(false)
-        // Clear localStorage setelah berhasil menampilkan
-        localStorage.removeItem('last_akun_order_id')
-        localStorage.removeItem('last_akun_order_time')
-        return
+      // Jika masih waiting_payment, poll di background untuk update status
+      if (status === 'waiting_payment' || status === 'pending') {
+        pollCount++
+        if (pollCount < 10) {
+          pollTimer = setTimeout(async () => {
+            if (cancelled) return
+            const updated = await fetchOrder()
+            if (updated && !cancelled) setOrder(updated)
+            const updatedStatus = updated?.status?.toLowerCase()
+            if (!cancelled && (updatedStatus === 'waiting_payment' || updatedStatus === 'pending') && pollCount < 10) {
+              pollTimer = setTimeout(pollForStatus, 4000)
+            }
+          }, 4000)
+        }
       }
-
-      // Masih waiting_payment — poll lagi
-      pollCount++
-      if (pollCount >= 12) {
-        setOrder(data)
-        setLoading(false)
-        return
-      }
-
-      pollTimer = setTimeout(pollForStatus, 3000)
     }
 
     setLoading(true)

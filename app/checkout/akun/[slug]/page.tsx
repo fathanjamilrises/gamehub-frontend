@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/authApi'
 import { orderAkunApi } from '@/lib/orderAkunApi'
 import { useToast } from '@/lib/contexts/ToastContext'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { savePendingPaymentRedirect, saveReceiptSnapshot, mapReceiptSnapshotFromOrder } from '@/lib/paymentReceipt'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -67,21 +68,35 @@ export default function AkunCheckoutPage() {
     setProcessing(true)
     try {
       const result = (await orderAkunApi.checkout(listing.id, catatan)) as any
-      toast('Pesanan berhasil dibuat! Mengalihkan ke pembayaran...', 'success')
-      
-      // Simpan order ID ke localStorage agar halaman success bisa menemukan order yang benar
-      const orderId = result.order?.id || result.id || result.data?.order?.id || result.data?.id
-      console.log('[Checkout] Order result:', result, 'Extracted orderId:', orderId)
-      if (orderId) {
-        localStorage.setItem('last_akun_order_id', orderId.toString())
-        localStorage.setItem('last_akun_order_time', Date.now().toString())
+      console.log('[Checkout] Order result:', result)
+
+      const order = result.order ?? result.data?.order ?? result.data ?? result
+      const orderId = String(order.id || order.invoice_number || '')
+      const orderCode = order.invoice_number || orderId || 'ORD-SUCCESS'
+
+      // Simpan snapshot nota
+      try {
+        const snapshot = mapReceiptSnapshotFromOrder({
+          ...order,
+          nama_games: listing.accountGame?.nama_game || listing.nama_game || 'Game',
+          nama_produk: listing.nama_akun || listing.judul || 'Akun Game',
+          harga_produk: listing.harga_jual,
+          image_url: listing.accountGame?.gambar_game || '',
+          status: order.status || 'pending_payment',
+        })
+        saveReceiptSnapshot(snapshot)
+      } catch (snapErr) {
+        console.error('Failed to save receipt snapshot:', snapErr)
       }
-      
-      const paymentUrl = result.payment?.invoice_url || result.payment_url || result.xendit_invoice_url || result.invoice_url || result.order?.payment_url;
+
+      const paymentUrl = result.payment?.invoice_url || result.payment_url || result.xendit_invoice_url || result.invoice_url || order.payment_url || order.xendit_invoice_url
       if (paymentUrl) {
+        savePendingPaymentRedirect(orderCode, orderId)
+        toast('Pesanan berhasil dibuat! Mengalihkan ke pembayaran...', 'success')
         window.location.href = paymentUrl
       } else {
-        router.push('/my-orders')
+        toast('Pesanan berhasil dibuat!', 'success')
+        window.location.href = `/payment/success?orderCode=${encodeURIComponent(orderCode)}&status=pending`
       }
     } catch (err: any) {
       toast(err.message || 'Gagal membuat pesanan', 'error')

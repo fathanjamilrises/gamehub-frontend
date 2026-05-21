@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { formatRupiah } from '@/lib/types'
 import { Order } from '@/lib/dummy/orders'
-import { getToken } from '@/lib/authApi'
+import { authFetch } from '@/lib/authApi'
 import { clearPendingPaymentRedirect, getPendingPaymentRedirect } from '@/lib/paymentReceipt'
 
 const API_BASE = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : ''
@@ -56,21 +56,9 @@ export default function OrdersPage() {
   useEffect(() => {
     const fetchOrders = async () => {
       setLoading(true)
-      const token = getToken()
-      
-      if (!token) {
-        setOrders([])
-        setLoading(false)
-        return
-      }
 
       try {
-        const res = await fetch('/api-proxy/orders', {
-          credentials: 'include',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const res = await authFetch('/api-proxy/orders')
         const data = await res.json()
 
         if (res.ok && data.success) {

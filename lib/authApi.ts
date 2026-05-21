@@ -238,26 +238,45 @@ async function authApiPost<T>(path: string, body: Record<string, any>, token?: s
 // Normalize various API response shapes into AuthResponse
 function normalizeAuth(data: any): AuthResponse {
   // Common shapes:
+  //  { success, message, data: { user: {...} } }           ← HttpOnly cookie, no token in body
   //  { success, data: { user, token } }
   //  { user, token }
   //  { data: { ... } }
   const payload = data?.data ?? data
-  const token = payload?.token ?? payload?.accessToken ?? data?.token
+
+  // Token: check multiple locations
+  const token =
+    payload?.token ??
+    payload?.accessToken ??
+    payload?.access_token ??
+    data?.token ??
+    data?.accessToken ??
+    data?.access_token
+
   const refreshToken =
-    payload?.refreshToken ?? payload?.refresh_token ?? data?.refreshToken ?? data?.refresh_token
-  const user =
+    payload?.refreshToken ??
+    payload?.refresh_token ??
+    data?.refreshToken ??
+    data?.refresh_token
+
+  // User: check payload.user first, then payload itself, then data.data.user
+  const rawUser =
     payload?.user ??
-    (payload?.id || payload?.email || payload?.id_user
-      ? {
-          id: String(payload.id || payload.id_user || payload.userId),
-          username: payload.username,
-          email: payload.email,
-          name: payload.name,
-          phone: payload.phone,
-          avatar: payload.avatar,
-          role: payload.role,
-        }
-      : undefined)
+    data?.data?.user ??
+    (payload?.id || payload?.email || payload?.id_user ? payload : null)
+
+  const user: AuthUser | undefined = rawUser
+    ? {
+        id: String(rawUser.id || rawUser.id_user || rawUser.userId || ''),
+        username: rawUser.username,
+        email: rawUser.email,
+        name: rawUser.name ?? rawUser.username,
+        phone: rawUser.phone,
+        avatar: rawUser.avatar,
+        role: rawUser.role,
+      }
+    : undefined
+
   return { success: true, user, token, refreshToken }
 }
 
@@ -288,15 +307,28 @@ export async function apiLogin(
       password,
     })
     const normalized = normalizeAuth(data)
+    console.log('[authApi] Login raw response (full):', JSON.stringify(data))
     console.log('[authApi] Login normalized result:', {
       hasToken: !!normalized.token,
       hasRefreshToken: !!normalized.refreshToken,
       hasUser: !!normalized.user,
       rawDataKeys: data ? Object.keys(data) : [],
-      rawPayloadKeys: data?.data ? Object.keys(data.data) : [],
+      rawDataDataKeys: data?.data ? Object.keys(data.data) : [],
+      rawDataData: data?.data,
     })
     if (normalized.token) setToken(normalized.token)
-    if (normalized.user) setStoredUser(normalized.user)
+    if (normalized.user) {
+      setStoredUser(normalized.user)
+      return normalized
+    }
+    // Backend pakai HttpOnly cookie — token tidak ada di body, fetch profil untuk dapatkan user
+    try {
+      const profileRes = await apiGetProfile()
+      if (profileRes.success && profileRes.user) {
+        setStoredUser(profileRes.user)
+        return { success: true, user: profileRes.user, token: normalized.token, refreshToken: normalized.refreshToken }
+      }
+    } catch { /* ignore */ }
     return normalized
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Login gagal' }
@@ -335,6 +367,7 @@ export async function apiGetProfile(): Promise<{ success: boolean; user?: AuthUs
     })
 
     const data = await response.json().catch(() => ({}))
+    console.log('[authApi] apiGetProfile raw:', JSON.stringify(data).slice(0, 400))
     if (!response.ok || data?.success === false) {
       const msg =
         formatErrors(data) ||
@@ -344,6 +377,7 @@ export async function apiGetProfile(): Promise<{ success: boolean; user?: AuthUs
     }
 
     const user = normalizeUser(data)
+    console.log('[authApi] apiGetProfile normalized user:', user)
     if (!user) {
       return { success: false, error: 'Data profil tidak valid' }
     }

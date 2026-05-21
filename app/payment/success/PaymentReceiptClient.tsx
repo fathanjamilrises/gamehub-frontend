@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatRupiah } from '@/lib/types'
-import { getToken } from '@/lib/authApi'
+import { authFetch } from '@/lib/authApi'
 import {
   clearPendingPaymentRedirect,
   getLatestReceiptSnapshot,
@@ -87,24 +87,23 @@ export default function PaymentReceiptClient({ orderCode, paymentStatus }: Props
     if (stored) {
       setReceipt({
         ...stored,
-        status: stored.status === 'pending_payment' && fallbackStatus === 'completed' ? 'completed' : stored.status,
+        status: fallbackStatus === 'completed' ? 'completed' : stored.status,
       })
     }
 
     const fetchLatestReceipt = async () => {
-      const token = getToken()
-      if (!token || !resolvedOrderId) {
+      if (!resolvedOrderId) {
         setLoading(false)
         return
       }
 
       try {
-        const res = await fetch(`/api-proxy/orders/${resolvedOrderId}`, {
-          credentials: 'include',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        // Try by orderId first, fallback to invoice_number search
+        let res = await authFetch(`/api-proxy/orders/${resolvedOrderId}`)
+        // If invoice_number (INV-...) used as ID → also try with just the numeric part
+        if (!res.ok && resolvedOrderId.includes('INV-')) {
+          res = await authFetch(`/api-proxy/orders?invoice_number=${encodeURIComponent(resolvedOrderId)}`)
+        }
 
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data.success) {
@@ -139,8 +138,12 @@ export default function PaymentReceiptClient({ orderCode, paymentStatus }: Props
             }
           : nextReceipt
 
-        saveReceiptSnapshot(mergedReceipt)
-        setReceipt(mergedReceipt)
+        // If Xendit redirect says success, override backend pending status
+        const finalReceipt = fallbackStatus === 'completed' && mergedReceipt.status === 'pending_payment'
+          ? { ...mergedReceipt, status: 'completed' as const }
+          : mergedReceipt
+        saveReceiptSnapshot(finalReceipt)
+        setReceipt(finalReceipt)
       } catch {
         // Keep using the local snapshot when live sync fails.
       } finally {

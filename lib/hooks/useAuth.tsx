@@ -77,8 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (emailOrUsername: string, password: string) => {
     clearLoggedOutFlag() // Hapus flag logout agar checkAuth bisa berjalan normal
     const result = await apiLogin(emailOrUsername, password)
-    if (result.success && result.user) {
-      setUser(result.user)
+    if (result.success) {
+      if (result.user) {
+        setUser(result.user)
+      } else {
+        // Backend pakai HttpOnly cookie — user tidak ada di body, fetch profil
+        await checkAuth()
+      }
       return { success: true }
     }
     return { success: false, error: result.error || 'Login gagal' }

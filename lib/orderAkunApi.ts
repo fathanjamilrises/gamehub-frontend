@@ -101,7 +101,8 @@ export const orderAkunApi = {
 
   // Step 2: Checkout — buat order + link bayar
   checkout: async (idListing: number, catatanPembeli?: string): Promise<CheckoutResponse> => {
-    const frontendOrigin = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const frontendOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+      (typeof window !== 'undefined' ? window.location.origin : '');
     const response = await authFetch(getBaseUrl('/checkout'), {
       method: 'POST',
       body: JSON.stringify({
@@ -121,9 +122,10 @@ export const orderAkunApi = {
 
   // Pembeli: list semua order saya
   getMyOrders: async (): Promise<AkunOrder[]> => {
-    const response = await authFetch(getBaseUrl(`?t=${Date.now()}`), { method: 'GET' });
+    const response = await authFetch(getBaseUrl(''), { method: 'GET' });
     if (!response.ok) throw new Error('Gagal mengambil riwayat pesanan');
     const data = await response.json();
+    console.log('[orderAkunApi] getMyOrders raw:', JSON.stringify(data).slice(0, 300));
     return data.data?.orders || data.data || data.orders || [];
   },
 
