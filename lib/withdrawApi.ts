@@ -66,7 +66,9 @@ export const bankAccountApi = {
       throw new Error(err.message || 'Gagal mengambil daftar rekening')
     }
     const data = await res.json()
-    const raw = data.data || data.banks || data
+    console.log('[withdraw/banks] raw:', JSON.stringify(data).slice(0, 300))
+    const inner = data.data ?? data
+    const raw = inner.banks ?? inner.data ?? (Array.isArray(inner) ? inner : [])
     return Array.isArray(raw) ? raw : []
   },
 
@@ -132,13 +134,23 @@ export const withdrawApi = {
       throw new Error(err.message || 'Gagal mengambil riwayat penarikan')
     }
     const data = await res.json()
-    const raw = data.data || data
+    console.log('[withdraw/history] raw:', JSON.stringify(data).slice(0, 300))
+    const inner = data.data ?? data
+    const list: WithdrawRecord[] = (
+      inner.withdrawals ??
+      inner.rows ??
+      inner.data ??
+      (Array.isArray(inner) ? inner : null) ??
+      []
+    )
+    const total: number = inner.total ?? inner.count ?? list.length
+    const computedPages = Math.ceil(total / 10)
     return {
-      withdrawals: raw.withdrawals || raw.data || [],
-      total: raw.total || 0,
-      page: raw.page || 1,
-      limit: raw.limit || 10,
-      total_pages: raw.total_pages || raw.totalPages || 1,
+      withdrawals: list,
+      total,
+      page: inner.page ?? 1,
+      limit: inner.limit ?? 10,
+      total_pages: inner.total_pages ?? inner.totalPages ?? (computedPages > 0 ? computedPages : 1),
     }
   },
 
@@ -272,9 +284,10 @@ export const adminWithdrawApi = {
   },
 
   // PUT /api/admin/withdraw/banks/:bankId/verify — Verifikasi rekening
-  verifyBank: async (bankId: number): Promise<any> => {
+  verifyBank: async (bankId: number, body: { is_verified: boolean; catatan_admin?: string }): Promise<any> => {
     const res = await authFetch(`/api-proxy/admin/withdraw/banks/${bankId}/verify`, {
       method: 'PUT',
+      body: JSON.stringify(body),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
