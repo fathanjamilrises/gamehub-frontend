@@ -11,10 +11,95 @@ import { getGames } from '@/lib/gamesApi'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+type AvailableGameOption = {
+  id: string
+  name: string
+  rawId?: string
+  accountGameId?: string
+  gamesId?: string
+  slug?: string
+}
+
 function resolveImageUrl(src?: string): string {
   if (!src) return ''
   if (src.startsWith('http') || src.startsWith('blob:') || src.startsWith('data:')) return src
   return BACKEND_URL + (src.startsWith('/') ? src : '/' + src)
+}
+
+function resolveGameOptionId(game: any, index: number): string {
+  return String(
+    game?.id_account_game ??
+    game?.accountGameId ??
+    game?.account_game_id ??
+    game?.id_games ??
+    game?.gameId ??
+    game?.id ??
+    game?._id ??
+    `game-${index}`
+  )
+}
+
+function normalizeAvailableGame(game: any, index: number): AvailableGameOption {
+  const slug = game?.slug_game != null ? String(game.slug_game) : game?.slug_games != null ? String(game.slug_games) : game?.slug != null ? String(game.slug) : undefined
+  const name = String(game?.nama_game ?? game?.nama_games ?? game?.name ?? game?.title ?? 'Unknown Game')
+
+  const normalizedSlug = (slug || '').toLowerCase().trim()
+  const normalizedName = name.toLowerCase().trim()
+
+  const fallbackIdBySlug: Record<string, string> = {
+    'mobile-legends': '1',
+    'free-fire': '2',
+    'pubg-mobile': '3',
+  }
+
+  const fallbackIdByName: Record<string, string> = {
+    'mobile legends': '1',
+    'mobile legends: bang bang': '1',
+    'free fire': '2',
+    'pubg mobile': '3',
+    'pubg mobile (id)': '3',
+  }
+
+  return {
+    id: resolveGameOptionId(game, index),
+    name,
+    rawId: game?.id != null ? String(game.id) : undefined,
+    accountGameId: game?.id_account_game != null ? String(game.id_account_game) : game?.accountGameId != null ? String(game.accountGameId) : game?.account_game_id != null ? String(game.account_game_id) : fallbackIdBySlug[normalizedSlug] ?? fallbackIdByName[normalizedName],
+    gamesId: game?.id_games != null ? String(game.id_games) : game?.gameId != null ? String(game.gameId) : undefined,
+    slug,
+  }
+}
+
+function resolveAccountGameIdForSubmit(selectedGame?: AvailableGameOption): number {
+  if (!selectedGame) return 0
+
+  const normalizedSlug = (selectedGame.slug || '')
+    .toLowerCase()
+    .trim()
+
+  const normalizedName = selectedGame.name
+    .toLowerCase()
+    .trim()
+
+  const fallbackIdBySlug: Record<string, number> = {
+    'mobile-legends': 1,
+    'free-fire': 2,
+    'pubg-mobile': 3,
+  }
+
+  const fallbackIdByName: Record<string, number> = {
+    'mobile legends': 1,
+    'mobile legends: bang bang': 1,
+    'free fire': 2,
+    'pubg mobile': 3,
+    'pubg mobile (id)': 3,
+  }
+
+  return (
+    fallbackIdBySlug[normalizedSlug] ??
+    fallbackIdByName[normalizedName] ??
+    Number(selectedGame.accountGameId ?? selectedGame.id ?? 0)
+  )
 }
 
 export default function JualAkunPage() {
@@ -45,16 +130,38 @@ export default function JualAkunPage() {
   const [gambarPreviews, setGambarPreviews] = useState<string[]>([])
   const [gambarFiles, setGambarFiles] = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
 
-  const [availableGames, setAvailableGames] = useState<any[]>([])
+  const [availableGames, setAvailableGames] = useState<AvailableGameOption[]>([])
+  const [editingGameMeta, setEditingGameMeta] = useState<{ idAccountGame?: string; slug?: string; name?: string } | null>(null)
 
   // Ambil daftar game saat komponen dimuat
   useEffect(() => {
     const fetchGames = async () => {
       try {
-        const gamesList = await getGames()
+        const res = await authFetch('/api-proxy/games', {
+          headers: { Accept: 'application/json' },
+        })
+
+        let gamesList: AvailableGameOption[] = []
+
+        if (res.ok) {
+          const data = await res.json().catch(() => null)
+          const payload = data?.data ?? data
+          const rawGames = Array.isArray(payload) ? payload : payload?.games
+
+          if (Array.isArray(rawGames)) {
+            gamesList = rawGames.map((game: any, index: number) => normalizeAvailableGame(game, index))
+          }
+        }
+
+        if (gamesList.length === 0) {
+          const fallbackGames = await getGames()
+          gamesList = fallbackGames.map((game, index) => normalizeAvailableGame(game, index))
+        }
+
         setAvailableGames(gamesList)
-        if (gamesList && gamesList.length > 0) {
+        if (!editId && gamesList && gamesList.length > 0) {
           setIdAccountGame(String(gamesList[0].id))
         }
       } catch (err) {
@@ -76,13 +183,17 @@ export default function JualAkunPage() {
           const item = rawData.find((a: any) => String(a.id) === String(editId))
           if (item) {
             setNamaPost(item.nama_post || '')
-            setIdAccountGame(String(item.id_account_game || '1'))
             setTipeTransaksi(item.tipe_transaksi || 'jual')
             setServerRegion(item.server_region || 'Indonesia')
             setHargaJual(String(item.harga_jual || ''))
             setIsNegotiable(item.is_negotiable == 1 || item.is_negotiable === true)
             setHargaNegoMin(String(item.harga_nego_min || ''))
             setDeskripsiDetail(item.deskripsi_detail || '')
+            setEditingGameMeta({
+              idAccountGame: item.id_account_game != null ? String(item.id_account_game) : undefined,
+              slug: item.accountGame?.slug_game != null ? String(item.accountGame.slug_game) : undefined,
+              name: item.accountGame?.nama_game != null ? String(item.accountGame.nama_game) : undefined,
+            })
             if (item.kondisi_akun) {
               setKondisiLevel(item.kondisi_akun.level || '')
               setKondisiRank(item.kondisi_akun.rank || '')
@@ -116,6 +227,33 @@ export default function JualAkunPage() {
     }
     fetchEditData()
   }, [editId])
+
+  useEffect(() => {
+    if (!editId || !editingGameMeta || availableGames.length === 0) return
+
+    const normalizedSlug = (editingGameMeta.slug || '').toLowerCase().trim()
+    const normalizedName = (editingGameMeta.name || '').toLowerCase().trim()
+
+    const matchedGame = availableGames.find((game) => {
+      const gameSlug = (game.slug || '').toLowerCase().trim()
+      const gameName = (game.name || '').toLowerCase().trim()
+
+      return (
+        (editingGameMeta.idAccountGame && game.accountGameId === editingGameMeta.idAccountGame) ||
+        (normalizedSlug && gameSlug === normalizedSlug) ||
+        (normalizedName && gameName === normalizedName)
+      )
+    })
+
+    if (matchedGame) {
+      setIdAccountGame(matchedGame.id)
+      return
+    }
+
+    if (editingGameMeta.idAccountGame) {
+      setIdAccountGame(editingGameMeta.idAccountGame)
+    }
+  }, [editId, editingGameMeta, availableGames])
 
   // Pastikan user adalah reseller yang approved atau sedang mode demo
   useEffect(() => {
@@ -216,6 +354,8 @@ export default function JualAkunPage() {
     try {
       const cleanHargaJual = hargaJual.replace(/\D/g, '')
       const cleanHargaNego = hargaNegoMin.replace(/\D/g, '')
+      const selectedGame = availableGames.find((game) => String(game.id) === String(idAccountGame))
+      const resolvedAccountGameId = resolveAccountGameIdForSubmit(selectedGame)
 
       const generatedSlug = namaPost
         .toLowerCase()
@@ -225,7 +365,7 @@ export default function JualAkunPage() {
       const payload = {
         nama_post: namaPost,
         slug: generatedSlug,
-        id_account_game: Number(idAccountGame),
+        id_account_game: resolvedAccountGameId,
         tipe_transaksi: tipeTransaksi,
         server_region: serverRegion,
         harga_jual: Number(cleanHargaJual),
@@ -252,8 +392,7 @@ export default function JualAkunPage() {
         }
         localStorage.setItem('dummy_reseller_accounts', JSON.stringify([newAccount, ...dummyAccounts]))
 
-        showSuccess('🎉 [DEMO] Akun berhasil diposting!')
-        router.push('/reseller')
+        setShowSuccessModal(true)
         return
       }
 
@@ -278,13 +417,17 @@ export default function JualAkunPage() {
         throw new Error(errorMsg)
       }
 
-      showSuccess('🎉 Akun berhasil diposting dan langsung tayang di tokomu!')
-      router.push('/reseller') // Kembali ke dashboard
+      setShowSuccessModal(true)
     } catch (err: any) {
       showError(err.message || 'Terjadi kesalahan saat memposting akun.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false)
+    router.push('/reseller')
   }
 
   // Format harga jadi Rupiah
@@ -347,7 +490,7 @@ export default function JualAkunPage() {
                 >
                   {availableGames.length > 0 ? (
                     availableGames.map(g => (
-                      <option key={g.id} value={g.id}>{g.nama_games || g.name || 'Unknown'}</option>
+                      <option key={g.id} value={g.id}>{g.name || 'Unknown'}</option>
                     ))
                   ) : (
                     <option value="1">Mobile Legends</option>
@@ -570,6 +713,31 @@ export default function JualAkunPage() {
         </div>
       </main>
       <Footer />
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleSuccessModalClose} />
+          <div className="relative w-full max-w-md rounded-2xl border-[3px] border-gray-900 bg-white p-6 shadow-[8px_8px_0px_#111827]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border-[3px] border-gray-900 bg-green-100 shadow-[3px_3px_0px_#111827]">
+              <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide text-gray-900">
+              Postingan Berhasil Dikirim
+            </h2>
+            <p className="mb-6 text-center text-sm font-bold leading-relaxed text-gray-600">
+              Mohon menunggu verifikasi admin agar postingan akun Anda dapat ditayangkan.
+            </p>
+            <button
+              onClick={handleSuccessModalClose}
+              className="w-full rounded-xl border-[3px] border-gray-900 bg-blue-600 px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-[3px_3px_0px_#111827] transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_#111827]"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

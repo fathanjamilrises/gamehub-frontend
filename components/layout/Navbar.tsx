@@ -86,9 +86,6 @@ export default function Navbar() {
             <Link href="/topup" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
               Top Up
             </Link>
-            <Link href="/vouchers" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-              Voucher
-            </Link>
             {(!isAuthenticated || user?.role === 'user') && (
               <Link href="/accounts" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
                 Beli Akun
