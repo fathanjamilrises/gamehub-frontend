@@ -23,6 +23,20 @@ export default function Navbar() {
     }
   }, [isAuthenticated])
 
+  useEffect(() => {
+    const handleOpenAuthModal = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tab?: 'login' | 'daftar' }>
+      setModalTab(customEvent.detail?.tab === 'daftar' ? 'daftar' : 'login')
+      setModalOpen(true)
+    }
+
+    window.addEventListener('open-auth-modal', handleOpenAuthModal)
+
+    return () => {
+      window.removeEventListener('open-auth-modal', handleOpenAuthModal)
+    }
+  }, [])
+
   const openLogin = () => { setModalTab('login'); setModalOpen(true) }
   const openDaftar = () => { setModalTab('daftar'); setModalOpen(true) }
 

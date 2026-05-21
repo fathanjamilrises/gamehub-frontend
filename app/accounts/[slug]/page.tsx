@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/authApi'
 import { chatApi } from '@/lib/chatApi'
 import { useCart } from '@/lib/contexts/CartContext'
 import { useToast } from '@/lib/contexts/ToastContext'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -43,6 +44,7 @@ export default function AccountDetailPage() {
   const [similarListings, setSimilarListings] = useState<any[]>([])
   
   const { addToCart } = useCart()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const { toast } = useToast()
   const [addingToCart, setAddingToCart] = useState(false)
   const [catatan, setCatatan] = useState('')
@@ -63,6 +65,11 @@ export default function AccountDetailPage() {
 
   const handleAddToCart = async () => {
     if (!listing) return
+
+    if (!authLoading && !isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { tab: 'login' } }))
+      return
+    }
     
     // Listing id should be an integer
     const idListing = parseInt(listing.id)
