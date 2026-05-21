@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { formatRupiah } from '@/lib/types'
-import { getToken, authFetch } from '@/lib/authApi'
+import { authFetch } from '@/lib/authApi'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { saveReceiptSnapshot, mapReceiptSnapshotFromOrder } from '@/lib/paymentReceipt'
 import Link from 'next/link'
 import { useToast } from '@/lib/contexts/ToastContext'
@@ -31,6 +32,7 @@ interface Props {
 export default function VoucherClient({ voucher }: Props) {
   const { success: showSuccess, error: showError, toast } = useToast()
   const { addToCart } = useCart()
+  const { isAuthenticated } = useAuth()
   const [addingToCart, setAddingToCart] = useState(false)
   const [waNumber, setWaNumber] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<VoucherProduct | null>(null)
@@ -91,8 +93,7 @@ export default function VoucherClient({ voucher }: Props) {
     setCreatingPayment(true)
     setCheckError('')
 
-    const token = getToken()
-    if (!token) {
+    if (!isAuthenticated) {
       const msg = 'Silakan login terlebih dahulu untuk membuat pesanan'
       setCheckError(msg)
       showError(msg)
@@ -114,7 +115,7 @@ export default function VoucherClient({ voucher }: Props) {
           id_produk: selectedProduct.kode || selectedProduct.id,
           id_player: waNumber, // Using waNumber as id_player for vouchers
           server: '',
-          access_token: getToken() || token,
+          access_token: undefined,
           success_redirect_url: redirectUrl,
           failure_redirect_url: redirectUrl,
           success_url: redirectUrl,

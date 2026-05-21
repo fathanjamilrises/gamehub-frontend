@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { formatRupiah, GameDetail, NominalItem } from '@/lib/types'
-import { getToken, authFetch } from '@/lib/authApi'
+import { authFetch } from '@/lib/authApi'
+import { useAuth } from '@/lib/hooks/useAuth'
 import { savePendingPaymentRedirect, saveReceiptSnapshot, mapReceiptSnapshotFromOrder } from '@/lib/paymentReceipt'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -151,6 +152,7 @@ function extractProducts(data: any): any[] {
 export default function TopUpClient({ game }: Props) {
   const { success: showSuccess, error: showError, toast } = useToast()
   const { addToCart } = useCart()
+  const { isAuthenticated } = useAuth()
   const [addingToCart, setAddingToCart] = useState(false)
   const [userId, setUserId] = useState('')
   const [serverId, setServerId] = useState('')
@@ -391,8 +393,7 @@ export default function TopUpClient({ game }: Props) {
     setCreatingPayment(true)
     setCheckError('')
 
-    const token = getToken()
-    if (!token) {
+    if (!isAuthenticated) {
       const msg = 'Silakan login terlebih dahulu untuk membuat pesanan'
       setCheckError(msg)
       showError(msg)
@@ -400,7 +401,8 @@ export default function TopUpClient({ game }: Props) {
       return
     }
 
-    const frontendUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const frontendUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+      (typeof window !== 'undefined' ? window.location.origin : '')
     const redirectUrl = `${frontendUrl}/payment/success`
 
     try {
@@ -414,7 +416,7 @@ export default function TopUpClient({ game }: Props) {
           id_produk: selectedNominal.code || selectedNominal.id,
           id_player: playerInfo.userId,
           server: playerInfo.serverId || '',
-          access_token: getToken() || token,
+          access_token: undefined,
           success_redirect_url: redirectUrl,
           failure_redirect_url: redirectUrl,
           success_url: redirectUrl,
@@ -428,16 +430,7 @@ export default function TopUpClient({ game }: Props) {
         const order = data.data?.order ?? {}
         const resolvedOrderCode = order.invoice_number || order.id || 'ORD-SUCCESS'
         
-        const paymentUrl = data.data?.xendit?.invoice_url || data.data?.order?.xendit_invoice_url
-        
-        if (paymentUrl) {
-          showSuccess('Pesanan dibuat! Mengalihkan ke pembayaran...')
-          window.location.href = paymentUrl
-          return
-        }
-
-        setOrderCode(resolvedOrderCode)
-        setOrderCreated(true)
+        const orderId = String(order.id || resolvedOrderCode)
 
         // Simpan snapshot untuk halaman nota
         try {
@@ -456,6 +449,21 @@ export default function TopUpClient({ game }: Props) {
         } catch (snapErr) {
           console.error('Failed to save receipt snapshot:', snapErr)
         }
+
+        const paymentUrl = data.data?.xendit?.invoice_url || data.data?.order?.xendit_invoice_url
+        
+        if (paymentUrl) {
+          // Simpan dulu agar saat kembali dari Xendit bisa redirect ke nota
+          savePendingPaymentRedirect(resolvedOrderCode, orderId)
+          showSuccess('Pesanan dibuat! Mengalihkan ke pembayaran...')
+          window.location.href = paymentUrl
+          return
+        }
+
+        // Tidak ada Xendit URL — redirect ke halaman nota langsung
+        setOrderCode(resolvedOrderCode)
+        setOrderCreated(true)
+        window.location.href = `/payment/success?orderCode=${encodeURIComponent(resolvedOrderCode)}&status=pending`
       } else {
         const msg = data.message || 'Gagal membuat pesanan'
         setCheckError(msg)
