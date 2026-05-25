@@ -173,7 +173,7 @@ export default function SellerOrdersPage() {
                       <div>
                         <h3 className="font-black text-gray-900 text-lg">{order.listing?.nama_post || 'Judul Akun'}</h3>
                         <p className="text-sm font-bold text-gray-500">Game: {order.listing?.accountGame?.nama_game || '-'}</p>
-                        <p className="text-sm font-bold text-gray-500">Pembeli: <span className="text-gray-700">{order.pembeli?.name || `ID #${order.id_pembeli || '-'}`}</span></p>
+                        <p className="text-sm font-bold text-gray-500">Pembeli: <span className="text-gray-700">{order.buyer?.username || order.buyer?.name || `ID #${order.id_user || '-'}`}</span></p>
                       </div>
                     </div>
 

@@ -76,7 +76,7 @@ export const chatApi = {
     const res = await authFetch(getBaseUrl('/unread'), { method: 'GET' });
     if (!res.ok) return 0;
     const data = await res.json();
-    return data.data?.unread_count || data.unread_count || 0;
+    return data.data?.total_unread || data.total_unread || data.data?.unread_count || data.unread_count || 0;
   },
 
   // Open/get room for a listing

@@ -18,9 +18,19 @@ export default function Navbar() {
   const [unreadChatCount, setUnreadChatCount] = useState(0)
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!isAuthenticated) {
+      setUnreadChatCount(0)
+      return
+    }
+
+    const fetchCount = () => {
       chatApi.getUnreadCount().then(count => setUnreadChatCount(count)).catch(() => {})
     }
+
+    fetchCount()
+    const interval = setInterval(fetchCount, 15000)
+
+    return () => clearInterval(interval)
   }, [isAuthenticated])
 
   useEffect(() => {

@@ -49,6 +49,9 @@ function isExpectedRefreshFailure(message: string): boolean {
 // ── Token / User storage ──────────────────────────────────────────
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
+  if (window.location.pathname.startsWith('/admin')) {
+    return localStorage.getItem('gamehub_admin_token')
+  }
   return localStorage.getItem(TOKEN_KEY)
 }
 
@@ -84,6 +87,15 @@ export function clearLoggedOutFlag() {
 
 export function getStoredUser(): AuthUser | null {
   if (typeof window === 'undefined') return null
+  if (window.location.pathname.startsWith('/admin')) {
+    const raw = localStorage.getItem('gamehub_admin_user')
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as AuthUser
+    } catch {
+      return null
+    }
+  }
   const raw = localStorage.getItem(USER_KEY)
   if (!raw) return null
   try {
@@ -382,7 +394,9 @@ export async function apiGetProfile(): Promise<{ success: boolean; user?: AuthUs
       return { success: false, error: 'Data profil tidak valid' }
     }
 
-    setStoredUser(user)
+    if (user.role?.toLowerCase() !== 'admin') {
+      setStoredUser(user)
+    }
     return { success: true, user }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Gagal mengambil profil' }
@@ -461,7 +475,11 @@ export async function authFetch(input: string, init: RequestInit = {}) {
     return headers
   }
 
-  const response = await fetch(input, { ...init, credentials: 'include', headers: createHeaders() })
+  const token = getToken()
+  const expired = isTokenExpired(token)
+  const credentialsMode = (token && !expired) ? 'omit' : 'include'
+
+  const response = await fetch(input, { ...init, credentials: credentialsMode, headers: createHeaders() })
 
   console.log(`[authFetch] ← ${response.status} ${input}`)
 

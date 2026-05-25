@@ -28,14 +28,17 @@ export type OrderStatus =
 export interface AkunOrder {
   id: number;
   invoice_number?: string;
-  id_pembeli: number;
-  id_penjual: number;
+  id_user?: number;
+  id_reseller?: number;
+  id_pembeli?: number;
+  id_penjual?: number;
   id_listing: number;
   status: OrderStatus;
   harga: number;
   fee_admin?: number;
   total_bayar?: number;
   total_harga?: number;
+  nama_listing?: string;
   catatan_pembeli?: string;
   catatan_penjual?: string;
   catatan_dispute?: string;
@@ -68,6 +71,22 @@ export interface AkunOrder {
     reseller?: {
       store_name?: string;
       nama_lengkap?: string;
+      username?: string;
+    };
+  };
+  buyer?: {
+    id: number;
+    name?: string;
+    username?: string;
+    email?: string;
+  };
+  reseller?: {
+    id: number;
+    nama_lengkap?: string;
+    store_name?: string;
+    email?: string;
+    user?: {
+      email?: string;
       username?: string;
     };
   };

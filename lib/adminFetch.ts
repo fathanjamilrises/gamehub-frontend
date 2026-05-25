@@ -22,7 +22,10 @@ export async function adminFetch(url: string, options: RequestInit = {}): Promis
     headers.set('Authorization', `Bearer ${tk}`)
   }
 
-  const res = await fetch(url, { ...options, credentials: 'include', headers })
+  const expired = isAdminTokenExpired(tk)
+  const credentialsMode = (tk && !expired) ? 'omit' : 'include'
+
+  const res = await fetch(url, { ...options, credentials: credentialsMode, headers })
 
   const newAccessToken = res.headers.get('x-new-acces-token') || res.headers.get('x-new-access-token')
 

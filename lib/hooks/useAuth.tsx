@@ -53,17 +53,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Jika ada data user di localStorage, pakai dulu agar UI tidak kedip (optimistic)
       if (stored) {
-        setUser(stored)
+        if (stored.role?.toLowerCase() === 'admin') {
+          setUser(null)
+        } else {
+          setUser(stored)
+        }
+      }
+
+      // Jika tidak ada token publik, jangan panggil profil karena rawan terisi oleh cookie admin
+      if (!token) {
+        setUser(null)
+        setIsLoading(false)
+        return
       }
 
       // Selalu coba fetch profil terbaru (ini akan mengirim cookies backend)
       const profileResult = await apiGetProfile()
 
       if (profileResult.success && profileResult.user) {
-        setUser(profileResult.user)
-      } else if (!token) {
-        // Jika fetch profil gagal dan tidak ada token di localStorage, 
-        // berarti memang tidak ada session aktif.
+        if (profileResult.user.role?.toLowerCase() === 'admin') {
+          console.log('[useAuth] Detected admin role from profile, ignoring in public useAuth')
+          setUser(null)
+        } else {
+          setUser(profileResult.user)
+        }
+      } else {
         setUser(null)
       }
     } catch (error) {
@@ -79,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await apiLogin(emailOrUsername, password)
     if (result.success) {
       if (result.user) {
+        if (result.user.role?.toLowerCase() === 'admin') {
+          return { success: false, error: 'Akses ditolak: Akun admin tidak dapat login di halaman publik' }
+        }
         setUser(result.user)
       } else {
         // Backend pakai HttpOnly cookie — user tidak ada di body, fetch profil
@@ -102,11 +119,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await apiRegister(name, email, password)
     if (result.success) {
       if (result.user) {
+        if (result.user.role?.toLowerCase() === 'admin') {
+          return { success: false, error: 'Registrasi admin tidak diizinkan' }
+        }
         setUser(result.user)
       } else {
         // Backend mungkin tidak auto-login
         const loginRes = await apiLogin(email, password)
-        if (loginRes.success && loginRes.user) setUser(loginRes.user)
+        if (loginRes.success && loginRes.user) {
+          if (loginRes.user.role?.toLowerCase() === 'admin') {
+            setUser(null)
+            return { success: false, error: 'Akses ditolak: Akun admin tidak dapat login di halaman publik' }
+          }
+          setUser(loginRes.user)
+        }
       }
       return { success: true }
     }

@@ -279,11 +279,11 @@ export default function SellerOrderDetailPage() {
               <div className="p-6 space-y-4">
                 <div>
                   <span className="text-xs font-black text-gray-400 uppercase">Nama Pembeli</span>
-                  <p className="font-black text-gray-900">{order.pembeli?.name || 'User'}</p>
+                  <p className="font-black text-gray-900">{order.buyer?.username || order.buyer?.name || 'User'}</p>
                 </div>
                 <div>
                   <span className="text-xs font-black text-gray-400 uppercase">ID Pembeli</span>
-                  <p className="font-bold text-gray-700">#{order.id_pembeli}</p>
+                  <p className="font-bold text-gray-700">#{order.id_user}</p>
                 </div>
               </div>
             </div>

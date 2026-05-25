@@ -1,0 +1,83 @@
+[
+  {
+    "timestamp": "2026-05-22T03:06:06.668Z",
+    "type": "raw_unread_response",
+    "data": {
+      "success": true,
+      "total_unread": 5
+    }
+  },
+  {
+    "timestamp": "2026-05-22T03:06:45.866Z",
+    "type": "raw_unread_response",
+    "data": {
+      "success": true,
+      "total_unread": 5
+    }
+  },
+  {
+    "timestamp": "2026-05-22T03:06:46.061Z",
+    "type": "raw_unread_response",
+    "data": {
+      "success": true,
+      "total_unread": 5
+    }
+  },
+  {
+    "timestamp": "2026-05-22T03:37:21.386Z",
+    "type": "orders_debug",
+    "firstOrder": {
+      "id": 10,
+      "invoice_number": "AKN-1779340435392-89E533",
+      "id_user": 6,
+      "id_listing": 8,
+      "id_reseller": 2,
+      "harga": "120000.00",
+      "nama_listing": "Akun ML IMMO Bintang 1Jt",
+      "xendit_invoice_id": "6a0e9496c458850bcfdeceeb",
+      "xendit_invoice_url": "https://checkout-staging.xendit.co/web/6a0e9496c458850bcfdeceeb",
+      "xendit_external_id": "AKN-1779340435392-89E533",
+      "xendit_status": "PAID",
+      "status": "completed",
+      "paid_at": "2026-05-21T05:14:28.887Z",
+      "delivered_at": "2026-05-21T05:16:30.525Z",
+      "confirmed_at": "2026-05-21T05:16:59.741Z",
+      "auto_confirm_at": "2026-05-24T05:16:30.525Z",
+      "disputed_at": null,
+      "completed_at": "2026-05-21T05:16:59.750Z",
+      "catatan_pembeli": null,
+      "catatan_penjual": "p",
+      "catatan_dispute": null,
+      "catatan_admin": null,
+      "createdAt": "2026-05-21T05:13:55.392Z",
+      "updatedAt": "2026-05-21T05:16:59.750Z",
+      "listing": {
+        "id": 8,
+        "nama_post": "Akun ML IMMO Bintang 1Jt",
+        "slug": "akun-ml-immo-bintang-1jt-rkpl6s",
+        "harga_jual": "120000.00",
+        "accountGame": {
+          "id": 1,
+          "nama_game": "Mobile Legends",
+          "slug_game": "mobile-legends",
+          "gambar_game": "https://i.pinimg.com/474x/82/55/03/8255033248d018b6c5f3d460b2deec16.jpg"
+        },
+        "screenshots": [
+          {
+            "id": 13,
+            "url_gambar": "/uploads/screenshot-1779340354101-0.jpg",
+            "urutan": 0
+          }
+        ]
+      },
+      "buyer": {
+        "id": 6,
+        "username": "rahadi"
+      },
+      "reseller": {
+        "id": 2,
+        "nama_lengkap": "tod"
+      }
+    }
+  }
+]

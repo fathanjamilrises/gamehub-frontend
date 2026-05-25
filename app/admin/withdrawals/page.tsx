@@ -61,21 +61,49 @@ const STATUS_TABS = [
 ]
 
 function getStatusBadge(status: string) {
-  switch (status) {
+  switch (status?.toLowerCase()) {
     case 'pending':
-      return <span className="px-2.5 py-1 bg-yellow-100 text-yellow-700 border-2 border-yellow-700 rounded-lg font-bold text-[11px]">Pending</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-amber-100 text-amber-800 border-2 border-amber-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Pending
+        </span>
+      )
     case 'processing':
-      return <span className="px-2.5 py-1 bg-blue-100 text-blue-700 border-2 border-blue-700 rounded-lg font-bold text-[11px]">Diproses</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-blue-100 text-blue-800 border-2 border-blue-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Diproses
+        </span>
+      )
     case 'approved':
-      return <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 border-2 border-indigo-700 rounded-lg font-bold text-[11px]">Disetujui</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-purple-100 text-purple-800 border-2 border-purple-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Disetujui
+        </span>
+      )
     case 'completed':
-      return <span className="px-2.5 py-1 bg-green-100 text-green-700 border-2 border-green-700 rounded-lg font-bold text-[11px]">Selesai</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-green-100 text-green-800 border-2 border-green-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Selesai
+        </span>
+      )
     case 'rejected':
-      return <span className="px-2.5 py-1 bg-red-100 text-red-700 border-2 border-red-700 rounded-lg font-bold text-[11px]">Ditolak</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-red-100 text-red-800 border-2 border-red-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Ditolak
+        </span>
+      )
     case 'cancelled':
-      return <span className="px-2.5 py-1 bg-gray-100 text-gray-600 border-2 border-gray-400 rounded-lg font-bold text-[11px]">Dibatalkan</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-gray-100 text-gray-700 border-2 border-gray-600 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          Dibatalkan
+        </span>
+      )
     default:
-      return <span className="px-2.5 py-1 bg-gray-100 text-gray-600 border-2 border-gray-400 rounded-lg font-bold text-[11px]">{status}</span>
+      return (
+        <span className="inline-block px-2.5 py-1 bg-gray-100 text-gray-700 border-2 border-gray-700 rounded-lg font-black text-[10px] uppercase shadow-[1.5px_1.5px_0px_#111827]">
+          {status}
+        </span>
+      )
   }
 }
 
@@ -85,6 +113,7 @@ export default function AdminWithdrawalsPage() {
 
   // ── Withdrawals state
   const [withdrawals, setWithdrawals] = useState<WithdrawItem[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -129,6 +158,7 @@ export default function AdminWithdrawalsPage() {
       const pages: number = inner.total_pages ?? inner.totalPages ?? data.total_pages ?? data.totalPages ?? (computedPages > 0 ? computedPages : 1)
       setWithdrawals(list)
       setTotalPages(pages)
+      setTotalCount(total)
     } catch (err) {
       console.error('[admin/withdraw] fetch error:', err)
     } finally {
@@ -201,7 +231,6 @@ export default function AdminWithdrawalsPage() {
     setActionLoading(true)
     try {
       let body: any = {}
-      let method = 'PUT'
       let url = `/api-proxy/admin/withdraw/${selectedWd.id}/${action}`
 
       if (action === 'process') {
@@ -225,7 +254,7 @@ export default function AdminWithdrawalsPage() {
       }
 
       const res = await adminFetch(url, {
-        method,
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
@@ -246,211 +275,411 @@ export default function AdminWithdrawalsPage() {
     }
   }
 
+  // Calculate quick values
+  const totalAmountThisPage = withdrawals.reduce((acc, curr) => acc + Number(curr.jumlah || 0), 0)
+  const pendingRequestsCount = withdrawals.filter(w => ['pending', 'processing'].includes(w.status?.toLowerCase())).length
+
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-gray-900">Manajemen Penarikan</h1>
-            <p className="text-sm text-gray-500">Kelola permintaan penarikan dana & verifikasi rekening reseller</p>
+            <div className="inline-flex items-center gap-2 bg-[#ffc900] border-[3px] border-gray-900 text-gray-900 text-[11px] font-black px-4 py-2 rounded mb-4 shadow-[4px_4px_0px_#111827] uppercase tracking-widest -rotate-1">
+              💸 KELOLA KEUANGAN RESELLER
+            </div>
+            <h1 className="text-3xl md:text-4xl font-black text-gray-900 uppercase tracking-tight">
+              Manajemen Penarikan
+            </h1>
+            <p className="text-gray-600 font-bold text-sm mt-1 border-l-[4px] border-[#ff90e8] pl-3 py-1">
+              Kelola permintaan penarikan dana (withdraw) & verifikasi rekening bank reseller terdaftar.
+            </p>
           </div>
+          <button
+            onClick={() => {
+              if (activeTab === 'withdrawals') fetchWithdrawals()
+              else fetchUnverifiedBanks()
+            }}
+            className="flex items-center gap-2 px-5 py-3 bg-[#ff90e8] border-[3px] border-gray-900 rounded-xl text-sm font-black text-gray-900 uppercase tracking-wider shadow-[4px_4px_0px_#111827] hover:shadow-[2px_2px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all shrink-0"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+
+        {/* Quick Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[
+            { label: 'Total Pengajuan', value: loading ? '—' : totalCount, icon: '💸', color: 'bg-cyan-300' },
+            { label: 'Pending Review', value: loading ? '—' : pendingRequestsCount, icon: '⏳', color: 'bg-[#ffc900]' },
+            { label: 'Total Penarikan (Halaman Ini)', value: loading ? '—' : `Rp ${totalAmountThisPage.toLocaleString('id-ID')}`, icon: '💰', color: 'bg-[#86efac]' },
+            { label: 'Belum Terverifikasi', value: banksLoading ? '—' : unverifiedBanks.length, icon: '🏦', color: 'bg-[#ff90e8]' },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white border-[3px] border-gray-900 rounded-xl p-5 shadow-[4px_4px_0px_#111827] relative overflow-hidden">
+              <div className={"absolute top-0 right-0 w-12 h-12 rounded-bl-2xl border-b-[3px] border-l-[3px] border-gray-900 " + stat.color} />
+              <p className="text-3xl mb-1">{stat.icon}</p>
+              <p className="text-xl md:text-2xl font-black text-gray-900 truncate pr-6">{stat.value}</p>
+              <p className="text-xs font-black text-gray-500 uppercase tracking-widest mt-1">{stat.label}</p>
+            </div>
+          ))}
         </div>
 
         {/* Main Page Tabs */}
-        <div className="flex gap-2 border-b-2 border-gray-200 pb-0">
-          {PAGE_TABS.map(tab => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className={`px-5 py-2.5 text-sm font-bold rounded-t-lg border-2 border-b-0 transition-all ${
-                activeTab === tab.value
-                  ? 'bg-white border-gray-900 text-gray-900 -mb-[2px]'
-                  : 'bg-gray-100 border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-              {tab.value === 'banks' && unverifiedBanks.length > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
-                  {unverifiedBanks.length}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-3">
+          {PAGE_TABS.map((tab) => {
+            const isActive = activeTab === tab.value
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`px-5 py-3 font-black text-xs md:text-sm rounded-xl border-[3px] border-gray-900 transition-all uppercase tracking-wider flex items-center gap-2 ${
+                  isActive
+                    ? 'bg-[#ffc900] text-gray-900 shadow-[4px_4px_0px_#111827] translate-y-[-2px] translate-x-[-2px]'
+                    : 'bg-white text-gray-700 shadow-[2px_2px_0px_#111827] hover:shadow-[4px_4px_0px_#111827] hover:translate-y-[-2px] hover:translate-x-[-2px]'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.value === 'banks' && unverifiedBanks.length > 0 && (
+                  <span className="bg-red-650 text-white text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-gray-900 shadow-[1px_1px_0_#111827]">
+                    {unverifiedBanks.length}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* ── TAB: PENARIKAN ── */}
         {activeTab === 'withdrawals' && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              {/* Status Filters */}
               <div className="flex flex-wrap gap-2">
-                {STATUS_TABS.map(tab => (
-                  <button
-                    key={tab.value}
-                    onClick={() => { setStatusFilter(tab.value); setPage(1) }}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                      statusFilter === tab.value
-                        ? 'bg-gray-900 text-white border-gray-900'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-900'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                {STATUS_TABS.map((tab) => {
+                  const isSelected = statusFilter === tab.value
+                  return (
+                    <button
+                      key={tab.value}
+                      onClick={() => {
+                        setStatusFilter(tab.value)
+                        setPage(1)
+                      }}
+                      className={`px-3.5 py-2 font-black text-xs rounded-lg border-2 border-gray-900 transition-all uppercase tracking-wider ${
+                        isSelected
+                          ? 'bg-gray-900 text-white shadow-none'
+                          : 'bg-white text-gray-900 shadow-[3px_3px_0px_#111827] hover:shadow-[1px_1px_0px_#111827] hover:translate-y-px hover:translate-x-px'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
               </div>
-              <div className="flex gap-2">
+
+              {/* Search Bar */}
+              <div className="relative w-full max-w-md shrink-0">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                </div>
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Cari reseller..."
-                  className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-900"
+                  placeholder="CARI RESELLER..."
+                  className="w-full border-[3px] border-gray-900 rounded-xl pl-12 pr-24 py-3 text-xs font-black uppercase tracking-wider focus:outline-none focus:shadow-[3px_3px_0px_#2563eb] transition-all bg-gray-50 focus:bg-white placeholder:text-gray-400"
                 />
-                <button onClick={handleSearch} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold">
+                <button
+                  onClick={handleSearch}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-black uppercase tracking-wider hover:bg-gray-805 transition-colors"
+                >
                   Cari
                 </button>
               </div>
             </div>
 
-            {/* Withdrawals Table */}
-            {loading ? (
-              <div className="py-16 flex items-center justify-center">
-                <div className="w-10 h-10 border-[3px] border-gray-900 border-t-purple-600 rounded-full animate-spin" />
-              </div>
-            ) : withdrawals.length === 0 ? (
-              <div className="py-16 text-center">
-                <p className="text-4xl mb-3">📋</p>
-                <p className="text-lg font-bold text-gray-500">Tidak ada data penarikan</p>
-              </div>
-            ) : (
-              <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-gray-50 border-b-2 border-gray-200">
+            {/* Withdrawals Table Card */}
+            <div className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0px_#111827] relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-cyan-300 rounded-bl-3xl border-b-[3px] border-l-[3px] border-gray-900" />
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 border-b-[3px] border-gray-900">
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900 w-20">
+                        ID
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900">
+                        Reseller
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900">
+                        Detail Rekening
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900 w-48">
+                        Jumlah Penarikan
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900 text-center w-32">
+                        Status
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest border-r-[3px] border-gray-900 text-center w-36">
+                        Tanggal
+                      </th>
+                      <th className="p-4 text-xs font-black text-gray-900 uppercase tracking-widest text-center w-28">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y-[3px] divide-gray-900">
+                    {loading ? (
                       <tr>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">ID</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Reseller</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Rekening</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Jumlah</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Tanggal</th>
-                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Aksi</th>
+                        <td colSpan={7} className="p-16 text-center">
+                          <div className="flex flex-col items-center gap-4">
+                            <div className="w-10 h-10 border-4 border-gray-900 border-t-purple-600 rounded-full animate-spin" />
+                            <p className="font-black text-gray-900 uppercase tracking-widest text-xs">
+                              Memuat data penarikan...
+                            </p>
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {withdrawals.map(wd => (
-                        <tr key={wd.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="p-4 text-sm font-bold text-gray-900">#{wd.id}</td>
-                          <td className="p-4">
-                            <p className="text-sm font-bold text-gray-900">{wd.reseller?.store_name || wd.reseller?.nama_lengkap || '-'}</p>
+                    ) : withdrawals.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-16 text-center">
+                          <p className="text-4xl mb-3">💸</p>
+                          <p className="font-black text-gray-900 uppercase tracking-wider text-base">
+                            Tidak ada data penarikan
+                          </p>
+                          <p className="text-xs font-bold text-gray-500 mt-1">
+                            {search || statusFilter
+                              ? 'Coba ubah kata kunci pencarian atau filter status.'
+                              : 'Belum ada pengajuan penarikan saat ini.'}
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      withdrawals.map((wd) => (
+                        <tr
+                          key={wd.id}
+                          className="hover:bg-gray-50/50 transition-colors border-b-[3px] border-gray-900 last:border-b-0"
+                        >
+                          {/* ID Column */}
+                          <td className="p-4 text-sm font-black text-gray-900 border-r-[3px] border-gray-900 font-mono">
+                            #{wd.id}
                           </td>
-                          <td className="p-4">
+
+                          {/* Reseller Column */}
+                          <td className="p-4 border-r-[3px] border-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-black text-gray-900">
+                                {wd.reseller?.store_name || wd.reseller?.nama_lengkap || '-'}
+                              </span>
+                            </div>
+                            <div className="mt-1">
+                              <span className="inline-block bg-purple-100 border border-gray-900 text-gray-900 text-[9px] font-black px-2 py-0.5 rounded shadow-[1px_1px_0px_#111827] uppercase">
+                                ID Reseller #{wd.reseller?.id || '-'}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Bank Detail Column */}
+                          <td className="p-4 border-r-[3px] border-gray-900">
                             {wd.bank_account ? (
-                              <div>
-                                <p className="text-xs font-bold text-gray-900">{wd.bank_account.nama_bank}</p>
-                                <p className="text-xs text-gray-500">{wd.bank_account.nomor_rekening} · {wd.bank_account.nama_pemilik}</p>
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-block bg-blue-100 border border-gray-900 text-gray-900 px-2 py-0.5 rounded font-black text-[9px] uppercase shadow-[1px_1px_0px_#111827]">
+                                    {wd.bank_account.nama_bank}
+                                  </span>
+                                  <span className="inline-block bg-amber-100 border border-gray-900 text-gray-900 px-2 py-0.5 rounded font-black text-[9px] uppercase shadow-[1px_1px_0px_#111827]">
+                                    {wd.bank_account.tipe}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-black text-blue-600 font-mono tracking-wider">
+                                  {wd.bank_account.nomor_rekening}
+                                </p>
+                                <p className="text-xs text-gray-700 font-bold">
+                                  a.n. {wd.bank_account.nama_pemilik}
+                                </p>
                                 {wd.bank_account.is_verified === false && (
-                                  <span className="text-[10px] font-bold text-orange-600">⚠ Belum Verif</span>
+                                  <span className="inline-block px-2 py-0.5 bg-red-100 text-red-800 border border-gray-900 text-[8px] font-black rounded shadow-[1px_1px_0px_#111827] uppercase">
+                                    ⚠️ Belum Terverifikasi
+                                  </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-xs text-gray-400">-</span>
+                              <span className="text-xs font-bold text-gray-400">—</span>
                             )}
                           </td>
-                          <td className="p-4 text-sm font-black text-gray-900">Rp {wd.jumlah.toLocaleString('id-ID')}</td>
-                          <td className="p-4">{getStatusBadge(wd.status)}</td>
-                          <td className="p-4 text-xs text-gray-500">
-                            {new Date(wd.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+
+                          {/* Amount Column */}
+                          <td className="p-4 border-r-[3px] border-gray-900">
+                            <span className="text-sm font-black text-emerald-600 font-mono">
+                              Rp {Number(wd.jumlah).toLocaleString('id-ID')}
+                            </span>
                           </td>
-                          <td className="p-4">
+
+                          {/* Status Column */}
+                          <td className="p-4 text-center border-r-[3px] border-gray-900">
+                            {getStatusBadge(wd.status)}
+                          </td>
+
+                          {/* Date Column */}
+                          <td className="p-4 text-center border-r-[3px] border-gray-900 font-bold text-gray-500 text-xs">
+                            {new Date(wd.createdAt).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </td>
+
+                          {/* Action Column */}
+                          <td className="p-4 text-center">
                             <button
-                              onClick={() => { setSelectedWd(wd); setNoteAdmin(''); setRejectReason(''); setBuktiUrl('') }}
-                              className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-700"
+                              onClick={() => {
+                                setSelectedWd(wd)
+                                setNoteAdmin(wd.catatan_admin || '')
+                                setRejectReason(wd.alasan_penolakan || '')
+                                setBuktiUrl(wd.bukti_transfer_url || '')
+                              }}
+                              className="bg-cyan-300 hover:bg-cyan-400 text-gray-900 text-[10px] font-black px-3.5 py-1.5 rounded-lg border-2 border-gray-900 shadow-[2px_2px_0px_#111827] hover:translate-y-px hover:shadow-none transition-all uppercase"
                             >
                               Detail
                             </button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-3 p-4 border-t-2 border-gray-200">
+              {/* Table Footer / Pagination */}
+              {!loading && withdrawals.length > 0 && totalPages > 1 && (
+                <div className="px-5 py-4 border-t-[3px] border-gray-900 bg-gray-50 flex items-center justify-between gap-4">
+                  <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                    Halaman {page} dari {totalPages}
+                  </p>
+
+                  <div className="flex items-center gap-1.5">
                     <button
                       disabled={page <= 1}
-                      onClick={() => setPage(p => p - 1)}
-                      className="px-3 py-1.5 border-2 border-gray-300 rounded-lg text-xs font-bold disabled:opacity-40"
+                      onClick={() => setPage((p) => p - 1)}
+                      className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black uppercase text-gray-900 shadow-[2px_2px_0px_#111827] hover:shadow-none hover:translate-y-px transition-all disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
                     >
-                      ← Prev
+                      Prev
                     </button>
-                    <span className="text-xs font-bold text-gray-600">{page} / {totalPages}</span>
                     <button
                       disabled={page >= totalPages}
-                      onClick={() => setPage(p => p + 1)}
-                      className="px-3 py-1.5 border-2 border-gray-300 rounded-lg text-xs font-bold disabled:opacity-40"
+                      onClick={() => setPage((p) => p + 1)}
+                      className="px-3 py-1.5 bg-white border-2 border-gray-900 rounded-lg text-xs font-black uppercase text-gray-900 shadow-[2px_2px_0px_#111827] hover:shadow-none hover:translate-y-px transition-all disabled:opacity-50 disabled:shadow-none disabled:translate-y-0"
                     >
-                      Next →
+                      Next
                     </button>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* ── TAB: VERIFIKASI REKENING ── */}
         {activeTab === 'banks' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Rekening yang perlu diverifikasi sebelum reseller bisa menarik dana</p>
-              <button onClick={fetchUnverifiedBanks} className="px-3 py-1.5 border-2 border-gray-300 rounded-lg text-xs font-bold hover:border-gray-900">
+          <div className="space-y-6">
+            <div className="bg-orange-50 border-[3px] border-gray-900 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-[4px_4px_0_#111827]">
+              <div>
+                <h3 className="font-black text-gray-900 text-sm uppercase">Perlu Verifikasi Rekening</h3>
+                <p className="text-xs font-bold text-gray-650 mt-0.5">
+                  Daftar rekening bank baru yang didaftarkan reseller. Verifikasi kecocokan nama untuk mencegah kesalahan transfer dana.
+                </p>
+              </div>
+              <button
+                onClick={fetchUnverifiedBanks}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-gray-900 rounded-xl text-xs font-black uppercase text-gray-900 shadow-[3px_3px_0px_#111827] hover:shadow-[1px_1px_0px_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all shrink-0"
+              >
                 🔄 Refresh
               </button>
             </div>
 
             {banksLoading ? (
               <div className="py-16 flex items-center justify-center">
-                <div className="w-10 h-10 border-[3px] border-gray-900 border-t-purple-600 rounded-full animate-spin" />
+                <div className="w-10 h-10 border-[3px] border-gray-900 border-t-orange-600 rounded-full animate-spin" />
               </div>
             ) : unverifiedBanks.length === 0 ? (
-              <div className="py-16 text-center bg-green-50 rounded-xl border-2 border-green-200">
+              <div className="py-16 text-center bg-green-50 rounded-2xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827]">
                 <p className="text-4xl mb-3">✅</p>
-                <p className="text-lg font-bold text-green-700">Semua rekening sudah terverifikasi</p>
+                <p className="font-black text-green-800 uppercase tracking-wide text-base">
+                  Semua rekening sudah terverifikasi
+                </p>
+                <p className="text-xs font-bold text-gray-500 mt-1">
+                  Belum ada rekening baru yang menunggu proses peninjauan.
+                </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {unverifiedBanks.map(bank => (
-                  <div key={bank.id} className="bg-white border-2 border-orange-300 rounded-xl p-5 shadow-sm">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-xs font-bold text-orange-600 uppercase mb-1">⏳ Menunggu Verifikasi</p>
-                        <p className="text-base font-black text-gray-900">{bank.nama_bank}</p>
-                        <p className="text-sm font-bold text-gray-700">{bank.nomor_rekening}</p>
-                        <p className="text-xs text-gray-500">a.n. {bank.nama_pemilik}</p>
-                        <p className="text-[10px] text-gray-400 capitalize mt-0.5">{bank.tipe}{bank.kode_bank ? ` · Kode: ${bank.kode_bank}` : ''}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {unverifiedBanks.map((bank) => (
+                  <div
+                    key={bank.id}
+                    className="bg-[#e0f2fe] border-[3px] border-gray-900 rounded-2xl p-6 shadow-[6px_6px_0px_#111827] flex flex-col justify-between hover:-translate-y-0.5 hover:shadow-[8px_8px_0_#111827] transition-all relative overflow-hidden"
+                  >
+                    {/* Hologram card chip illustration */}
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="w-10 h-8 bg-amber-400 border-2 border-gray-900 rounded-md relative overflow-hidden shadow-[1.5px_1.5px_0_#111827] shrink-0">
+                        <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 border-collapse">
+                          <div className="border-r border-b border-gray-900/30" />
+                          <div className="border-r border-b border-gray-900/30" />
+                          <div className="border-b border-gray-900/30" />
+                          <div className="border-r border-gray-900/30" />
+                          <div className="border-r border-gray-900/30" />
+                          <div className="border-gray-900/30" />
+                        </div>
                       </div>
-                      {bank.is_primary && (
-                        <span className="bg-purple-100 text-purple-700 text-[10px] font-black px-2 py-0.5 rounded-full">Utama</span>
-                      )}
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="inline-block bg-white border border-gray-900 text-gray-900 text-[9px] font-black px-2 py-0.5 rounded shadow-[1px_1px_0px_#111827] uppercase">
+                          {bank.nama_bank}
+                        </span>
+                        {bank.is_primary && (
+                          <span className="inline-block bg-purple-400 border border-gray-900 text-gray-900 text-[9px] font-black px-2 py-0.5 rounded shadow-[1px_1px_0px_#111827] uppercase">
+                            ⭐ Utama
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="border-t border-gray-100 pt-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Reseller</p>
-                      <p className="text-sm font-bold text-gray-900">{bank.reseller?.store_name || bank.reseller?.nama_lengkap || '-'}</p>
-                      <p className="text-[10px] text-gray-400">
-                        Didaftarkan: {new Date(bank.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+
+                    <div>
+                      <p className="text-lg font-black text-gray-900 font-mono tracking-widest">
+                        {bank.nomor_rekening}
+                      </p>
+                      <div className="mt-2 flex flex-col">
+                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Nama Pemilik</span>
+                        <span className="text-sm font-black text-gray-900 uppercase">{bank.nama_pemilik}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600 font-bold capitalize mt-2 border-t border-gray-900/10 pt-2">
+                        Tipe: {bank.tipe} {bank.kode_bank ? `· Kode: ${bank.kode_bank}` : ''}
                       </p>
                     </div>
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={() => { setSelectedBank(bank); setBankNoteAdmin('') }}
-                        className="flex-1 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-gray-700"
-                      >
-                        Tinjau
-                      </button>
+
+                    {/* Reseller Info section inside card */}
+                    <div className="bg-white/60 border-2 border-dashed border-gray-900/30 rounded-xl p-3.5 mt-4 space-y-1">
+                      <div className="flex justify-between items-center text-[9px] font-black text-gray-400 uppercase">
+                        <span>Pemohon Reseller</span>
+                        <span className="bg-purple-100 text-gray-900 border border-gray-900 px-1 py-0.2 rounded font-mono">ID #{bank.reseller?.id}</span>
+                      </div>
+                      <p className="text-xs font-black text-gray-800">{bank.reseller?.store_name || bank.reseller?.nama_lengkap || '-'}</p>
+                      <p className="text-[9px] font-bold text-gray-500">
+                        {new Date(bank.createdAt).toLocaleString('id-ID')}
+                      </p>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        setSelectedBank(bank)
+                        setBankNoteAdmin('')
+                      }}
+                      className="w-full mt-5 py-3 bg-[#ff90e8] hover:bg-[#ff7ae4] text-gray-900 font-black text-xs uppercase tracking-wider rounded-xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[3px] hover:translate-x-[3px] transition-all"
+                    >
+                      🔍 Tinjau Rekening
+                    </button>
                   </div>
                 ))}
               </div>
@@ -460,46 +689,80 @@ export default function AdminWithdrawalsPage() {
 
         {/* Verifikasi Bank Modal */}
         {selectedBank && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border-2 border-gray-200">
-              <div className="bg-orange-500 p-5 text-white flex items-center justify-between">
-                <h3 className="font-bold text-base">Verifikasi Rekening</h3>
-                <button onClick={() => setSelectedBank(null)} className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30">✕</button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl border-2 border-gray-200">
-                  <p className="text-xs font-bold text-gray-400 uppercase mb-2">Detail Rekening</p>
-                  <p className="text-base font-black text-gray-900">{selectedBank.nama_bank}</p>
-                  <p className="text-sm font-bold text-gray-700">{selectedBank.nomor_rekening}</p>
-                  <p className="text-xs text-gray-500">a.n. {selectedBank.nama_pemilik}</p>
-                  <p className="text-[10px] text-gray-400 capitalize">{selectedBank.tipe}{selectedBank.kode_bank ? ` · Kode: ${selectedBank.kode_bank}` : ''}</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                  <p className="text-[10px] font-bold text-blue-500 uppercase">Reseller</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedBank.reseller?.store_name || selectedBank.reseller?.nama_lengkap || '-'}</p>
-                </div>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedBank(null)}
+          >
+            <div
+              className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0_#111827] w-full max-w-md overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b-[3px] border-gray-900 bg-[#ffc900] flex items-center justify-between">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Catatan Admin (Opsional)</label>
+                  <h2 className="text-base font-black text-gray-900 uppercase">
+                    Verifikasi Rekening Bank
+                  </h2>
+                  <p className="text-[9px] font-bold text-gray-950 uppercase tracking-wider mt-0.5">
+                    Tinjau detail akun bank reseller
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedBank(null)}
+                  className="w-8 h-8 flex items-center justify-center bg-white border-2 border-gray-900 rounded-lg shadow-[1.5px_1.5px_0px_#111827] hover:translate-y-px hover:shadow-none hover:bg-gray-100 transition-all font-bold text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-5">
+                {/* Detail Rekening */}
+                <div className="bg-gray-50 border-2 border-gray-900 rounded-xl p-4 shadow-[3px_3px_0_#111827] space-y-1.5 text-sm font-bold text-gray-800">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Detail Rekening</span>
+                  <p className="text-lg font-black text-gray-950 leading-none">{selectedBank.nama_bank}</p>
+                  <p className="text-sm font-black text-blue-600 tracking-wider leading-none mt-1">{selectedBank.nomor_rekening}</p>
+                  <p className="text-xs text-gray-700 leading-none mt-1">a.n. {selectedBank.nama_pemilik}</p>
+                  <p className="text-[10px] text-gray-400 capitalize pt-1 mt-1 border-t border-gray-200">
+                    Tipe: {selectedBank.tipe} {selectedBank.kode_bank ? `· Kode: ${selectedBank.kode_bank}` : ''}
+                  </p>
+                </div>
+
+                {/* Reseller Info */}
+                <div className="bg-blue-50 border-2 border-gray-900 rounded-xl p-3 shadow-[3px_3px_0_#111827]">
+                  <span className="text-[9px] font-black text-blue-500 uppercase block leading-none">Reseller Pemohon</span>
+                  <p className="text-sm font-black text-gray-900 mt-1 leading-none">
+                    {selectedBank.reseller?.store_name || selectedBank.reseller?.nama_lengkap || '-'}
+                  </p>
+                </div>
+
+                {/* Catatan Admin */}
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                    Catatan Admin (Opsional)
+                  </label>
                   <input
                     type="text"
                     value={bankNoteAdmin}
                     onChange={(e) => setBankNoteAdmin(e.target.value)}
-                    placeholder="Catatan untuk reseller"
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                    placeholder="Berikan catatan verifikasi..."
+                    className="w-full border-[3px] border-gray-900 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-600 focus:bg-white placeholder:text-gray-400 bg-gray-50 shadow-[3px_3px_0_#111827]"
                   />
                 </div>
+
+                {/* Action Buttons */}
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => doVerifyBank(false)}
                     disabled={bankActionLoading}
-                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-red-700"
+                    className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-black uppercase text-xs rounded-xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#111827] transition-all disabled:opacity-50"
                   >
                     {bankActionLoading ? '...' : '❌ Tolak'}
                   </button>
                   <button
                     onClick={() => doVerifyBank(true)}
                     disabled={bankActionLoading}
-                    className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-green-700"
+                    className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-black uppercase text-xs rounded-xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#111827] transition-all disabled:opacity-50"
                   >
                     {bankActionLoading ? '...' : '✅ Verifikasi'}
                   </button>
@@ -511,130 +774,185 @@ export default function AdminWithdrawalsPage() {
 
         {/* Detail Withdraw Modal */}
         {selectedWd && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border-2 border-gray-200">
-              <div className="bg-gray-900 p-5 text-white flex items-center justify-between">
-                <h3 className="font-bold text-base">Detail Penarikan #{selectedWd.id}</h3>
-                <button onClick={() => setSelectedWd(null)} className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30">✕</button>
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedWd(null)}
+          >
+            <div
+              className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0_#111827] w-full max-w-lg overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b-[3px] border-gray-900 bg-[#ff90e8] flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-black text-gray-900 uppercase">
+                    Detail Penarikan #{selectedWd.id}
+                  </h2>
+                  <p className="text-[9px] font-bold text-gray-950 uppercase tracking-wider mt-0.5">
+                    Kelola permohonan penarikan dana reseller
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedWd(null)}
+                  className="w-8 h-8 flex items-center justify-center bg-white border-2 border-gray-900 rounded-lg shadow-[1.5px_1.5px_0px_#111827] hover:translate-y-px hover:shadow-none hover:bg-gray-100 transition-all font-bold text-xs"
+                >
+                  ✕
+                </button>
               </div>
 
+              {/* Modal Body */}
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 border-2 border-gray-900 rounded-xl shadow-[3px_3px_0_#111827]">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">Jumlah</p>
-                    <p className="text-lg font-black text-gray-900">Rp {selectedWd.jumlah.toLocaleString('id-ID')}</p>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Jumlah</span>
+                    <p className="text-xl font-black text-emerald-600 leading-none mt-1 font-mono">Rp {Number(selectedWd.jumlah).toLocaleString('id-ID')}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">Status</p>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Status</span>
                     <div className="mt-1">{getStatusBadge(selectedWd.status)}</div>
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Reseller</p>
-                  <p className="text-sm font-bold text-gray-900">{selectedWd.reseller?.store_name || selectedWd.reseller?.nama_lengkap || '-'}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 border-2 border-gray-900 rounded-xl p-3 shadow-[3px_3px_0_#111827]">
+                    <span className="text-[9px] font-black text-blue-500 uppercase block">Reseller Pemohon</span>
+                    <p className="text-sm font-black text-gray-955 mt-1 leading-none">
+                      {selectedWd.reseller?.store_name || selectedWd.reseller?.nama_lengkap || '-'}
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 border-2 border-gray-900 rounded-xl p-3 shadow-[3px_3px_0_#111827]">
+                    <span className="text-[9px] font-black text-purple-550 uppercase block">Tanggal Pengajuan</span>
+                    <p className="text-xs font-black text-gray-955 mt-1.5 leading-none">
+                      {new Date(selectedWd.createdAt).toLocaleString('id-ID')}
+                    </p>
+                  </div>
                 </div>
 
                 {selectedWd.bank_account && (
-                  <div className="bg-gray-50 p-3 rounded-lg border">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Rekening Tujuan</p>
-                    <p className="text-sm font-bold">{selectedWd.bank_account.nama_bank} ({selectedWd.bank_account.tipe})</p>
-                    <p className="text-sm text-gray-700">{selectedWd.bank_account.nomor_rekening}</p>
-                    <p className="text-xs text-gray-500">a.n. {selectedWd.bank_account.nama_pemilik}</p>
+                  <div className="bg-gray-50 p-4 border-2 border-gray-900 rounded-xl shadow-[3px_3px_0_#111827]">
+                    <span className="text-[9px] font-black text-gray-400 uppercase block leading-none">Rekening Tujuan Transfer</span>
+                    <p className="text-sm font-black text-gray-950 mt-2 leading-none">
+                      {selectedWd.bank_account.nama_bank} ({selectedWd.bank_account.tipe})
+                    </p>
+                    <p className="text-sm font-black text-blue-600 tracking-wider mt-1.5 leading-none">
+                      {selectedWd.bank_account.nomor_rekening}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 leading-none font-bold">
+                      a.n. {selectedWd.bank_account.nama_pemilik}
+                    </p>
                   </div>
                 )}
 
                 {selectedWd.catatan_reseller && (
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">Catatan Reseller</p>
-                    <p className="text-sm text-gray-700">{selectedWd.catatan_reseller}</p>
+                  <div className="bg-amber-50 border border-amber-300 p-3 rounded-lg">
+                    <span className="text-[9px] font-black text-amber-600 uppercase block">Catatan Reseller</span>
+                    <p className="text-xs font-bold text-gray-700 mt-1 leading-relaxed">{selectedWd.catatan_reseller}</p>
                   </div>
                 )}
 
                 {selectedWd.alasan_penolakan && (
-                  <div className="bg-red-50 p-3 rounded-lg border border-red-200">
-                    <p className="text-[10px] font-bold text-red-500 uppercase">Alasan Penolakan</p>
-                    <p className="text-sm text-red-700">{selectedWd.alasan_penolakan}</p>
+                  <div className="bg-red-50 p-3.5 border border-red-200 rounded-xl">
+                    <span className="text-[9px] font-black text-red-550 uppercase block">Alasan Penolakan</span>
+                    <p className="text-xs font-bold text-red-700 mt-1 leading-relaxed">{selectedWd.alasan_penolakan}</p>
                   </div>
                 )}
 
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Tanggal</p>
-                  <p className="text-sm text-gray-700">{new Date(selectedWd.createdAt).toLocaleString('id-ID')}</p>
-                </div>
+                {selectedWd.bukti_transfer_url && (
+                  <div className="bg-green-50 p-3.5 border border-green-200 rounded-xl">
+                    <span className="text-[9px] font-black text-green-550 uppercase block">Bukti Transfer</span>
+                    <a
+                      href={selectedWd.bukti_transfer_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-black text-blue-600 hover:underline mt-1 block truncate"
+                    >
+                      🔗 Lihat Bukti Pembayaran
+                    </a>
+                  </div>
+                )}
 
                 {/* Action Forms */}
                 {(selectedWd.status === 'pending' || selectedWd.status === 'processing' || selectedWd.status === 'approved') && (
-                  <div className="border-t pt-4 space-y-3">
+                  <div className="border-t-2 border-gray-200 pt-4 space-y-4">
+                    {/* Catatan Admin input */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Catatan Admin</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                        Catatan Admin (Opsional)
+                      </label>
                       <input
                         type="text"
                         value={noteAdmin}
                         onChange={(e) => setNoteAdmin(e.target.value)}
-                        placeholder="Opsional"
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                        placeholder="Berikan catatan admin jika diperlukan..."
+                        className="w-full border-[3px] border-gray-900 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-600 focus:bg-white placeholder:text-gray-400 bg-gray-50 shadow-[3px_3px_0_#111827]"
                       />
                     </div>
 
+                    {/* Bukti Transfer URL input */}
                     {(selectedWd.status === 'approved' || selectedWd.status === 'processing') && (
                       <div>
-                        <label className="block text-xs font-bold text-gray-700 mb-1">Bukti Transfer URL</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                          Bukti Transfer URL <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <input
                           type="text"
                           value={buktiUrl}
                           onChange={(e) => setBuktiUrl(e.target.value)}
-                          placeholder="URL bukti transfer"
-                          className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                          placeholder="Masukkan link/url bukti pembayaran..."
+                          className="w-full border-[3px] border-gray-900 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-600 focus:bg-white placeholder:text-gray-400 bg-gray-50 shadow-[3px_3px_0_#111827]"
                         />
                       </div>
                     )}
 
+                    {/* Alasan Penolakan input */}
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Alasan Penolakan</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                        Alasan Penolakan (Wajib jika menolak)
+                      </label>
                       <input
                         type="text"
                         value={rejectReason}
                         onChange={(e) => setRejectReason(e.target.value)}
-                        placeholder="Wajib jika menolak"
-                        className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-900"
+                        placeholder="Tulis alasan jika Anda menolak penarikan..."
+                        className="w-full border-[3px] border-gray-900 rounded-xl p-3 text-sm font-bold focus:outline-none focus:border-purple-600 focus:bg-white placeholder:text-gray-400 bg-gray-50 shadow-[3px_3px_0_#111827]"
                       />
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-2">
+                    {/* Action buttons list */}
+                    <div className="flex flex-wrap gap-3 pt-2">
                       {selectedWd.status === 'pending' && (
                         <button
                           onClick={() => doAction('process')}
                           disabled={actionLoading}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                          className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white border-[3px] border-gray-900 shadow-[4px_4px_0px_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#111827] transition-all rounded-xl text-xs font-black uppercase"
                         >
-                          Proses
+                          ⚙️ Proses
                         </button>
                       )}
                       {(selectedWd.status === 'pending' || selectedWd.status === 'processing') && (
                         <button
                           onClick={() => doAction('approve')}
                           disabled={actionLoading}
-                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                          className="flex-1 py-3 bg-purple-500 hover:bg-purple-600 text-white border-[3px] border-gray-900 shadow-[4px_4px_0px_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#111827] transition-all rounded-xl text-xs font-black uppercase"
                         >
-                          Setujui
+                          ✓ Setujui
                         </button>
                       )}
                       {(selectedWd.status === 'approved' || selectedWd.status === 'processing') && (
                         <button
                           onClick={() => doAction('complete')}
                           disabled={actionLoading}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                          className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white border-[3px] border-gray-900 shadow-[4px_4px_0px_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#111827] transition-all rounded-xl text-xs font-black uppercase"
                         >
-                          Selesai
+                          ✅ Selesai
                         </button>
                       )}
                       <button
                         onClick={() => doAction('reject')}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                        className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white border-[3px] border-gray-900 shadow-[4px_4px_0px_#111827] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#111827] transition-all rounded-xl text-xs font-black uppercase"
                       >
-                        Tolak
+                        ❌ Tolak
                       </button>
                     </div>
                   </div>

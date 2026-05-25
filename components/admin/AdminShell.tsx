@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { chatApi } from '@/lib/chatApi'
 
 interface AdminUser {
   id: number
@@ -31,6 +32,9 @@ const NAV_ITEMS = [
   { label: 'Listing Akun', href: '/admin/listings', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
   )},
+  { label: 'Chat', href: '/admin/chat', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+  )},
   { label: 'Pesanan', href: '/admin/orders', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
   )},
@@ -51,6 +55,23 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [user, setUser] = useState<AdminUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    const token = localStorage.getItem('gamehub_admin_token')
+    if (!token) return
+
+    const fetchCount = () => {
+      chatApi.getUnreadCount()
+        .then(count => setUnreadCount(count))
+        .catch(() => {})
+    }
+
+    fetchCount()
+    const interval = setInterval(fetchCount, 15000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('gamehub_admin_token')
@@ -83,6 +104,20 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }, [router])
 
   const handleLogout = () => {
+    const token = localStorage.getItem('gamehub_admin_token')
+    if (token) {
+      fetch('/api-proxy/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      }).catch(err => {
+        console.error('[AdminShell] Logout API error:', err)
+      })
+    }
     localStorage.removeItem('gamehub_admin_token')
     localStorage.removeItem('gamehub_admin_refresh_token')
     localStorage.removeItem('gamehub_admin_user')
@@ -125,24 +160,31 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </Link>
       </div>
 
-      {/* Nav Items */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href)
+          const isChat = item.label === 'Chat'
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
               className={
-                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-black uppercase tracking-wider transition-all " +
+                "flex items-center justify-between px-4 py-3 rounded-xl text-sm font-black uppercase tracking-wider transition-all " +
                 (active
                   ? 'bg-[#ffc900] text-gray-900 border-[3px] border-gray-700 shadow-[3px_3px_0px_#ffc900]'
                   : 'text-gray-300 hover:text-white hover:bg-gray-800 border-[3px] border-transparent')
               }
             >
-              <span className={active ? 'text-gray-900' : 'text-gray-400'}>{item.icon}</span>
-              {item.label}
+              <div className="flex items-center gap-3">
+                <span className={active ? 'text-gray-900' : 'text-gray-400'}>{item.icon}</span>
+                {item.label}
+              </div>
+              {isChat && unreadCount > 0 && (
+                <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-gray-900 shadow-[1px_1px_0px_#111827]">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           )
         })}
