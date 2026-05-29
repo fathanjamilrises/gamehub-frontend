@@ -1,4 +1,4 @@
-import { authFetch } from './authApi';
+import { authFetch, getToken } from './authApi';
 
 const getCartUrl = (path = '') => {
   const base = typeof window === 'undefined' ? `${process.env.NEXT_PUBLIC_API_URL}/api/cart` : '/api-proxy/cart';
@@ -60,6 +60,7 @@ export type AddToCartPayload = AddToCartAkunPayload | AddToCartTopupPayload;
 
 export const cartApi = {
   getCart: async (): Promise<CartResponse> => {
+    if (!getToken()) throw new Error('Unauthorized');
     const response = await authFetch(getCartUrl(), { method: 'GET' });
     if (response.status === 401) throw new Error('Unauthorized');
     if (!response.ok) throw new Error('Gagal memuat keranjang');
@@ -68,6 +69,7 @@ export const cartApi = {
   },
 
   getCartCount: async (): Promise<{ count: number }> => {
+    if (!getToken()) throw new Error('Unauthorized');
     const response = await authFetch(getCartUrl('/count'), { method: 'GET' });
     if (response.status === 401) throw new Error('Unauthorized');
     if (!response.ok) throw new Error('Gagal memuat jumlah keranjang');
@@ -76,6 +78,7 @@ export const cartApi = {
   },
 
   checkCartItemAkun: async (idListing: number): Promise<{ in_cart: boolean }> => {
+    if (!getToken()) return { in_cart: false };
     const response = await authFetch(getCartUrl(`/check/akun/${idListing}`), { method: 'GET' });
     if (response.status === 401) throw new Error('Unauthorized');
     if (!response.ok) throw new Error('Gagal mengecek keranjang');
@@ -84,6 +87,7 @@ export const cartApi = {
   },
 
   checkCartItemTopup: async (idProduk: number, targetId: string): Promise<{ in_cart: boolean }> => {
+    if (!getToken()) return { in_cart: false };
     const response = await authFetch(getCartUrl(`/check/topup/${idProduk}?topup_target_id=${encodeURIComponent(targetId)}`), { method: 'GET' });
     if (response.status === 401) throw new Error('Unauthorized');
     if (!response.ok) throw new Error('Gagal mengecek keranjang');

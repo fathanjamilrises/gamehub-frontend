@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { AuthProvider } from '@/lib/hooks/useAuth'
 import Providers from '@/components/providers/Providers'
 
 export const metadata: Metadata = {
@@ -20,10 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body style={{ fontFamily: "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif" }}>
         <Providers>
-          <AuthProvider>
-            {children}
-            <CartDrawer />
-          </AuthProvider>
+          {children}
+          <CartDrawer />
         </Providers>
       </body>
     </html>

@@ -55,6 +55,11 @@ export default function BeliAkunPage() {
   useEffect(() => {
     const fetchListings = async () => {
       setLoading(true)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        controller.abort()
+      }, 5000) // 5 seconds timeout to prevent endless skeleton loading if backend is offline
+
       try {
         const params = new URLSearchParams({
           page: String(currentPage),
@@ -63,17 +68,25 @@ export default function BeliAkunPage() {
         if (searchQuery) params.set('search', searchQuery)
         if (selectedGame !== 'all') params.set('game', selectedGame)
 
-        const res = await authFetch(`/api-proxy/jual-beli-akun?${params.toString()}`)
+        const res = await authFetch(`/api-proxy/jual-beli-akun?${params.toString()}`, {
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
+
         console.log('[BeliAkun] Fetch response status:', res.status)
         if (res.ok) {
           const data = await res.json()
           console.log('[BeliAkun] Data received:', data)
           setListings(data.data || [])
           setTotalPages(data.pagination?.totalPages || 1)
+        } else {
+          setListings([])
         }
       } catch (err) {
         console.error('Failed to fetch listings:', err)
+        setListings([])
       } finally {
+        clearTimeout(timeoutId)
         setLoading(false)
       }
     }
@@ -195,7 +208,7 @@ export default function BeliAkunPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-black text-gray-900 uppercase mb-1">Belum Ada Akun Tersedia</h3>
+              <h3 className="text-lg font-black text-gray-900 uppercase mb-1">Belum ada item</h3>
               <p className="text-sm font-bold text-gray-500">Coba ubah kata kunci pencarian atau filter game Anda.</p>
             </div>
           ) : (

@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { cartApi, CartResponse, AddToCartPayload } from '../cartApi';
 import { useToast } from './ToastContext';
+import { useAuth } from '../hooks/useAuth';
+import { getToken } from '../authApi';
 
 interface CartContextType {
   cart: CartResponse | null;
@@ -28,8 +30,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const fetchCartCount = useCallback(async () => {
+    if (!getToken()) {
+      setCartCount(0);
+      return;
+    }
     try {
       const data = await cartApi.getCartCount();
       setCartCount(data.count);
@@ -41,6 +48,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchCart = useCallback(async () => {
+    if (!getToken()) {
+      setCart(null);
+      setCartCount(0);
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       const data = await cartApi.getCart();
@@ -59,9 +72,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetchCartCount();
-    fetchCart();
-  }, [fetchCartCount, fetchCart]);
+    if (authLoading) return;
+
+    if (isAuthenticated) {
+      fetchCartCount();
+      fetchCart();
+    } else {
+      setCart(null);
+      setCartCount(0);
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, authLoading, fetchCartCount, fetchCart]);
 
   const addToCart = async (payload: AddToCartPayload) => {
     try {
@@ -138,6 +159,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const checkCartItemAkun = async (idListing: number): Promise<boolean> => {
+    if (!getToken()) return false;
     try {
       const data = await cartApi.checkCartItemAkun(idListing);
       return data.in_cart;
@@ -147,6 +169,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const checkCartItemTopup = async (idProduk: number, targetId: string): Promise<boolean> => {
+    if (!getToken()) return false;
     try {
       const data = await cartApi.checkCartItemTopup(idProduk, targetId);
       return data.in_cart;

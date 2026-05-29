@@ -130,6 +130,10 @@ export default function AkunCheckoutPage() {
   const feeAdmin = 0 
   const totalBayar = harga + feeAdmin
 
+  const reseller = listing.reseller || listing.user || {}
+  const resellerAvatar = reseller.user?.avatar || reseller.avatar
+  const resellerName = reseller.store_name || reseller.nama_lengkap || reseller.username || reseller.name || reseller.user?.name || 'Toko'
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
@@ -180,13 +184,13 @@ export default function AkunCheckoutPage() {
                     <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-2 leading-tight">{listing.nama_post}</h3>
                     <div className="inline-flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg border-2 border-gray-900 mb-4">
                       <div className="w-6 h-6 bg-gray-300 rounded-full border border-gray-900 overflow-hidden">
-                        {listing.reseller?.user?.avatar ? (
-                          <img src={resolveImageUrl(listing.reseller.user.avatar)} className="w-full h-full object-cover" />
+                        {resellerAvatar ? (
+                          <img src={resolveImageUrl(resellerAvatar)} className="w-full h-full object-cover" />
                         ) : (
                           <svg className="w-full h-full text-gray-500 bg-gray-200" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
                         )}
                       </div>
-                      <span className="text-xs font-bold text-gray-700">Penjual: <span className="text-gray-900">{listing.reseller?.store_name || listing.reseller?.user?.name || 'Toko'}</span></span>
+                      <span className="text-xs font-bold text-gray-700">Penjual: <span className="text-gray-900">{resellerName}</span></span>
                     </div>
                   </div>
                   <div>
