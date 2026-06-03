@@ -60,12 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Jika tidak ada token publik, jangan panggil profil karena rawan terisi oleh cookie admin
-      if (!token) {
-        setUser(null)
-        setIsLoading(false)
-        return
-      }
+      // Jika tidak ada token publik dan tidak ada user tersimpan,
+      // kita tetap panggil profil karena backend mungkin menggunakan HttpOnly cookie
+      // yang tidak terdeteksi di localStorage.
+      // (Dihapus block return !token agar cookie tetap terverifikasi)
 
       // Selalu coba fetch profil terbaru (ini akan mengirim cookies backend)
       const profileResult = await apiGetProfile()

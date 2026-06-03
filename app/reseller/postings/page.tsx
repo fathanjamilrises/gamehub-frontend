@@ -6,6 +6,7 @@ import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import { orderAkunApi } from '@/lib/orderAkunApi'
 import { useToast } from '@/lib/contexts/ToastContext'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -243,9 +244,22 @@ export default function ResellerPostingsPage() {
       <Footer />
 
       {/* Delete Confirmation Modal */}
+      <AnimatePresence>
       {deleteId && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setDeleteId(null)}>
-          <div className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0_#111827] w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <motion.div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setDeleteId(null)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.25 } }}
+          exit={{ opacity: 0, transition: { duration: 0.2 } }}
+        >
+          <motion.div
+            className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0_#111827] w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.92, y: 28 }}
+            animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.95, y: 16, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+          >
             <h3 className="text-lg font-black text-gray-900 uppercase mb-2">Hapus Postingan?</h3>
             <p className="text-sm font-bold text-gray-500 mb-6">Postingan yang dihapus tidak dapat dikembalikan.</p>
             <div className="flex gap-3">
@@ -263,9 +277,10 @@ export default function ResellerPostingsPage() {
                 Batal
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

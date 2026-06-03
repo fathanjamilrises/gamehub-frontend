@@ -98,9 +98,12 @@ export default function OrdersAkunPage() {
           <Link href="/orders" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
             Top Up / Voucher
           </Link>
-          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm">
+          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm border-r-2 border-gray-900">
             Beli Akun
           </button>
+          <Link href="/orders/joki" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+            Jasa Joki
+          </Link>
         </div>
 
         {/* Orders List */}

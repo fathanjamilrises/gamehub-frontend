@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { useToast } from '@/lib/contexts/ToastContext'
 import { authFetch } from '@/lib/authApi'
 import { getGames } from '@/lib/gamesApi'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -714,10 +715,21 @@ function JualAkunContent() {
       </main>
       <Footer />
 
+      <AnimatePresence>
       {showSuccessModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <motion.div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.25 } }}
+          exit={{ opacity: 0, transition: { duration: 0.2 } }}
+        >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleSuccessModalClose} />
-          <div className="relative w-full max-w-md rounded-2xl border-[3px] border-gray-900 bg-white p-6 shadow-[8px_8px_0px_#111827]">
+          <motion.div
+            className="relative w-full max-w-md rounded-2xl border-[3px] border-gray-900 bg-white p-6 shadow-[8px_8px_0px_#111827]"
+            initial={{ opacity: 0, scale: 0.92, y: 28 }}
+            animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+            exit={{ opacity: 0, scale: 0.95, y: 16, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+          >
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border-[3px] border-gray-900 bg-green-100 shadow-[3px_3px_0px_#111827]">
               <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -735,9 +747,10 @@ function JualAkunContent() {
             >
               OK
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { saveReceiptSnapshot, mapReceiptSnapshotFromOrder } from '@/lib/paymentR
 import Link from 'next/link'
 import { useToast } from '@/lib/contexts/ToastContext'
 import { useCart } from '@/lib/contexts/CartContext'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface VoucherProduct {
   id: string
@@ -344,13 +345,24 @@ export default function VoucherClient({ voucher }: Props) {
     </div>
 
     {/* ── Confirmation Popup ── */}
+    <AnimatePresence>
     {showConfirm && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1, transition: { duration: 0.25 } }}
+        exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      >
         <div
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={() => !creatingPayment && handleCloseConfirm()}
         />
-        <div className="relative bg-white rounded-2xl border-[3px] border-gray-900 shadow-[8px_8px_0px_#111827] w-full max-w-sm p-6 overflow-hidden">
+        <motion.div
+          className="relative bg-white rounded-2xl border-[3px] border-gray-900 shadow-[8px_8px_0px_#111827] w-full max-w-sm p-6 overflow-hidden"
+          initial={{ opacity: 0, scale: 0.92, y: 28 }}
+          animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+          exit={{ opacity: 0, scale: 0.95, y: 16, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+        >
           {/* Header */}
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-pink-400 via-yellow-400 to-cyan-400 border-b-[3px] border-gray-900" />
           <div className="flex items-center justify-between mb-6 mt-2">
@@ -462,9 +474,10 @@ export default function VoucherClient({ voucher }: Props) {
               </div>
             </>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     )}
+    </AnimatePresence>
     </>
   )
 }

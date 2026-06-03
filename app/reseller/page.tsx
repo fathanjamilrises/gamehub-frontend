@@ -10,6 +10,7 @@ import { authFetch } from '@/lib/authApi'
 import { orderAkunApi } from '@/lib/orderAkunApi'
 import { walletApi, WalletInfo, WalletTransaction, WalletStats } from '@/lib/walletApi'
 import { bankAccountApi, withdrawApi, BankAccount, WithdrawRecord } from '@/lib/withdrawApi'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -1465,9 +1466,20 @@ export default function ResellerPage() {
           )}
 
           {/* Modal Ajukan Penarikan */}
+          <AnimatePresence>
           {showWithdrawModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827] animate-fadeIn">
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.25 } }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            >
+              <motion.div
+                className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827]"
+                initial={{ opacity: 0, scale: 0.92, y: 28 }}
+                animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+                exit={{ opacity: 0, scale: 0.95, y: 16, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+              >
                 <div className="bg-blue-600 p-4 text-white flex items-center justify-between border-b-[3px] border-gray-900">
                   <h3 className="font-black text-sm uppercase tracking-wider">Tarik Pendapatan Reseller</h3>
                   <button 
@@ -1577,14 +1589,26 @@ export default function ResellerPage() {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
           {/* Modal Tambah Rekening */}
+          <AnimatePresence>
           {showAddBankModal && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827] animate-fadeIn">
+            <motion.div
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.25 } }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            >
+              <motion.div
+                className="bg-white border-[3px] border-gray-900 rounded-2xl w-full max-w-md overflow-hidden shadow-[8px_8px_0px_#111827]"
+                initial={{ opacity: 0, scale: 0.92, y: 28 }}
+                animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+                exit={{ opacity: 0, scale: 0.95, y: 16, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } }}
+              >
                 <div className="bg-purple-600 p-4 text-white flex items-center justify-between border-b-[3px] border-gray-900">
                   <h3 className="font-black text-sm uppercase tracking-wider">Tambah Rekening</h3>
                   <button 
@@ -1677,9 +1701,10 @@ export default function ResellerPage() {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
+          </AnimatePresence>
 
         </main>
         <Footer />

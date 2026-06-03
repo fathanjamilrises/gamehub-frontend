@@ -235,8 +235,11 @@ export default function OrdersPage() {
           <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm border-r-2 border-gray-900">
             Top Up / Voucher
           </button>
-          <Link href="/orders/akun" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+          <Link href="/orders/akun" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
             Beli Akun
+          </Link>
+          <Link href="/orders/joki" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+            Jasa Joki
           </Link>
         </div>
 
