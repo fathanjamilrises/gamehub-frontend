@@ -8,12 +8,23 @@ import Footer from '@/components/layout/Footer'
 import { authFetch } from '@/lib/authApi'
 import { useToast } from '@/lib/contexts/ToastContext'
 import { JokiOrder } from '@/lib/types'
+import { AnimatePresence, motion } from 'framer-motion'
 
 export default function OrdersJokiPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [orders, setOrders] = useState<JokiOrder[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Action Modal State
+  const [actionModalOpen, setActionModalOpen] = useState(false)
+  const [actionModalConfig, setActionModalConfig] = useState({
+    title: '',
+    description: '',
+    confirmText: '',
+    confirmColor: 'bg-blue-600',
+    onConfirm: () => {}
+  })
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -27,7 +38,7 @@ export default function OrdersJokiPage() {
         setOrders([
           {
             id: 1,
-            invoice_number: 'JKI-1716970000000',
+            invoice_number: 'JKI-1716970000000-A1B2C3',
             status: 'done',
             harga: 150000,
             nama_games: 'Mobile Legends',
@@ -53,16 +64,15 @@ export default function OrdersJokiPage() {
   }, [])
 
   const handleConfirmDone = async (id: number) => {
-    if (!confirm('Apakah pesanan joki ini benar-benar sudah selesai?')) return
     try {
       const res = await authFetch(`/api-proxy/joki-orders/my/${id}/confirm`, {
         method: 'POST'
       })
       if (res.ok) {
-        alert('Order dikonfirmasi selesai!')
+        toast('Order dikonfirmasi selesai!', 'success')
         fetchOrders()
       } else {
-        alert('Simulasi order dikonfirmasi!')
+        toast('Simulasi order dikonfirmasi!', 'success')
         setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'confirmed' } : o))
       }
     } catch (err) {
@@ -72,6 +82,7 @@ export default function OrdersJokiPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'waiting_payment':
       case 'pending': return <span className="px-3 py-1 bg-yellow-100 text-yellow-700 border-2 border-yellow-700 rounded-md font-bold text-xs uppercase">Menunggu Pembayaran</span>
       case 'paid': return <span className="px-3 py-1 bg-blue-100 text-blue-700 border-2 border-blue-700 rounded-md font-bold text-xs uppercase">Menunggu Worker</span>
       case 'in_progress': return <span className="px-3 py-1 bg-purple-100 text-purple-700 border-2 border-purple-700 rounded-md font-bold text-xs uppercase">Sedang Dijoki</span>
@@ -137,14 +148,31 @@ export default function OrdersJokiPage() {
                     <div className="text-left sm:text-right flex flex-col items-start sm:items-end gap-2">
                       <p className="font-black text-gray-900 text-xl text-blue-600">Rp {order.harga.toLocaleString('id-ID')}</p>
                       
-                      {order.status === 'pending' && order.invoice_url && (
+                      {(order.status === 'waiting_payment' || order.status === 'pending') && order.invoice_url && (
                         <a href={order.invoice_url} className="bg-[#ffc900] border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]">Bayar Sekarang</a>
                       )}
 
                       {order.status === 'done' && (
-                        <button onClick={() => handleConfirmDone(order.id)} className="bg-green-400 border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]">
+                        <button 
+                          onClick={() => {
+                            setActionModalConfig({
+                              title: 'Konfirmasi Selesai',
+                              description: 'Apakah pesanan joki ini benar-benar sudah selesai dan sesuai harapan?',
+                              confirmText: 'Ya, Konfirmasi',
+                              confirmColor: 'bg-green-400',
+                              onConfirm: () => handleConfirmDone(order.id)
+                            })
+                            setActionModalOpen(true)
+                          }} 
+                          className="bg-green-400 border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]"
+                        >
                           Konfirmasi Selesai
                         </button>
+                      )}
+                      {order.room_chat_id && (
+                        <Link href={`/chat/${order.room_chat_id}`} className="bg-blue-200 text-blue-900 border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]">
+                          Chat Worker
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -156,6 +184,63 @@ export default function OrdersJokiPage() {
         )}
 
       </main>
+
+      {/* Generic Action Modal */}
+      <AnimatePresence>
+        {actionModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"
+            onClick={() => setActionModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="bg-white border-[3px] border-gray-900 rounded-2xl shadow-[8px_8px_0_#111827] w-full max-w-sm overflow-hidden relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className={`p-5 border-b-[3px] border-gray-900 ${actionModalConfig.confirmColor} flex items-center justify-between`}>
+                <h2 className="text-md font-black text-gray-900 uppercase">
+                  {actionModalConfig.title}
+                </h2>
+                <button 
+                  onClick={() => setActionModalOpen(false)} 
+                  className="w-8 h-8 flex items-center justify-center bg-white border-2 border-gray-900 rounded-lg shadow-[1.5px_1.5px_0px_#111827] hover:translate-x-[0.5px] hover:translate-y-[0.5px] hover:shadow-[1px_1px_0px_#111827] transition-all"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm font-bold text-gray-600">{actionModalConfig.description}</p>
+                
+                <div className="flex gap-3 pt-4 border-t border-dashed border-gray-200">
+                  <button 
+                    onClick={() => {
+                      actionModalConfig.onConfirm()
+                      setActionModalOpen(false)
+                    }}
+                    className={`flex-1 py-3 ${actionModalConfig.confirmColor} text-gray-900 font-black uppercase tracking-wider text-xs rounded-xl border-[3px] border-gray-900 shadow-[3px_3px_0px_#111827] hover:shadow-[1.5px_1.5px_0px_#111827] hover:translate-y-0.5 hover:translate-x-0.5 transition-all`}
+                  >
+                    {actionModalConfig.confirmText}
+                  </button>
+                  <button 
+                    onClick={() => setActionModalOpen(false)} 
+                    className="px-6 py-3 bg-white text-gray-900 font-black uppercase tracking-wider text-xs rounded-xl border-[3px] border-gray-900 shadow-[3px_3px_0px_#111827] hover:shadow-[1.5px_1.5px_0px_#111827] hover:translate-y-0.5 hover:translate-x-0.5 transition-all"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

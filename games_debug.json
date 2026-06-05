@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 3,
+      "nama_games": "Free Fire",
+      "gambar_games": "https://static.vecteezy.com/system/resources/previews/020/335/976/non_2x/freefire-logo-freefire-icon-free-free-vector.jpg",
+      "slug_games": "free-fire",
+      "publisher": {
+        "nama_publisher": "Garena",
+        "logo_publisher": "https://example.com/garena.png"
+      }
+    },
+    {
+      "id": 1,
+      "nama_games": "Mobile Legends",
+      "gambar_games": "https://i.pinimg.com/474x/82/55/03/8255033248d018b6c5f3d460b2deec16.jpg",
+      "slug_games": "mobile-legends",
+      "publisher": {
+        "nama_publisher": "Moonton",
+        "logo_publisher": "https://example.com/moonton.png"
+      }
+    },
+    {
+      "id": 2,
+      "nama_games": "PUBG Mobile (ID)",
+      "gambar_games": "/uploads/game-1777516097944.jpg",
+      "slug_games": "pubg-mobile",
+      "publisher": {
+        "nama_publisher": "Tencent",
+        "logo_publisher": "https://example.com/tencent.png"
+      }
+    }
+  ]
+}

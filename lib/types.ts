@@ -39,13 +39,29 @@ export interface User {
   role: string
 }
 
+export interface JokiSubProduct {
+  id: number;
+  id_produk_joki?: number;
+  nama_sub: string;
+  satuan: string;
+  harga_per_unit: string | number;
+  min_unit?: number;
+  max_unit?: number | null;
+  is_active?: boolean;
+}
+
 export interface WorkerService {
   id: number;
-  nama_layanan: string;
+  nama_layanan?: string;
+  nama_produk?: string; // backend format
   deskripsi: string;
-  harga_per_hari: number;
-  rank_dari: string;
-  rank_ke: string;
+  harga_per_hari?: number;
+  harga?: number; // backend format
+  rank_dari?: string;
+  rank_ke?: string;
+  kategori_joki?: string;
+  minimal_order?: number;
+  gambar_produk?: string;
   is_active: boolean;
   game?: {
     id: number;
@@ -53,6 +69,7 @@ export interface WorkerService {
     slug_games: string;
     gambar_games: string;
   };
+  subs?: JokiSubProduct[]; // backend sub-products
 }
 
 export interface WorkerProfile {
@@ -77,20 +94,30 @@ export interface JokiOrder {
   status: string; // 'waiting_payment', 'paid', 'in_progress', 'done', 'confirmed', 'cancelled'
   harga: number;
   nama_games: string;
-  rank_saat_ini: string;
-  rank_target: string;
-  invoice_url?: string; // Sometimes returned with the order or wrapper
+  rank_saat_ini?: string;
+  rank_target?: string;
+  invoice_url?: string;
   created_at?: string;
   updated_at?: string;
-  // User input fields (may not be returned in list but useful for types)
+  // User input fields (returned in detail/list)
   slug_games?: string;
   id_service?: number;
+  id_sub_produk?: number;
+  jumlah_unit?: number;
+  satuan?: string;
   payer_email?: string;
-  login_type?: string;
+  login_type?: string; // 'email' | 'google' | 'facebook' | 'moonton' | 'other'
   game_email?: string;
   game_password?: string;
   game_username?: string;
   catatan_user?: string;
+  room_chat_id?: number;
+}
+
+// Joki order creation response from backend
+export interface JokiOrderCreateResponse {
+  order: JokiOrder;
+  invoice_url: string;
 }
 
 // API response types
