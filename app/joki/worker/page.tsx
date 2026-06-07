@@ -38,7 +38,12 @@ export default function WorkerDashboard() {
   const [profile, setProfile] = useState<WorkerProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<JokiOrder[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'wallet' | 'invitations'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'wallet' | 'team'>('overview')
+
+  // Team & Invitations States
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [joinCode, setJoinCode] = useState('')
+  const [isJoiningTeam, setIsJoiningTeam] = useState(false)
 
   // Financial Stats & Wallet data
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null)
@@ -358,6 +363,45 @@ export default function WorkerDashboard() {
     fetchWorkerLocalWallet()
   }
 
+  const fetchTeamMembers = () => {
+    if (!profile) return
+    const localTeamKey = `worker_team_${profile.id}`
+    const storedTeam = JSON.parse(typeof window !== 'undefined' ? (localStorage.getItem(localTeamKey) || '[]') : '[]')
+    if (storedTeam.length === 0) {
+      const selfMember = {
+        id: profile.id,
+        nama_lengkap: profile.nama_lengkap,
+        role: 'Ketua Tim',
+        joined_at: new Date().toISOString()
+      }
+      localStorage.setItem(localTeamKey, JSON.stringify([selfMember]))
+      setTeamMembers([selfMember])
+    } else {
+      setTeamMembers(storedTeam)
+    }
+  }
+
+  const handleJoinTeam = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!joinCode.trim()) return
+    setIsJoiningTeam(true)
+    setTimeout(() => {
+      setIsJoiningTeam(false)
+      showSuccess(`Berhasil bergabung ke tim dengan kode: ${joinCode}`)
+      setJoinCode('')
+      const newMember = {
+        id: Date.now(),
+        nama_lengkap: 'Worker Baru',
+        role: 'Anggota',
+        joined_at: new Date().toISOString()
+      }
+      const updated = [...teamMembers, newMember]
+      const localTeamKey = `worker_team_${profile?.id}`
+      localStorage.setItem(localTeamKey, JSON.stringify(updated))
+      setTeamMembers(updated)
+    }, 1000)
+  }
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchProfileAndOrders()
@@ -367,6 +411,7 @@ export default function WorkerDashboard() {
   useEffect(() => {
     if (profile) {
       fetchWalletAndHistory()
+      fetchTeamMembers()
     }
   }, [profile, orders])
 
@@ -1126,14 +1171,14 @@ export default function WorkerDashboard() {
                 🏦 Dompet & Penarikan
               </button>
               <button
-                onClick={() => setActiveTab('invitations')}
+                onClick={() => setActiveTab('team')}
                 className={`px-5 py-3.5 font-black uppercase text-xs sm:text-sm tracking-wider border-t-[3px] border-x-[3px] border-gray-900 rounded-t-xl transition-all duration-200 whitespace-nowrap ${
-                  activeTab === 'invitations'
+                  activeTab === 'team'
                     ? 'bg-purple-300 text-gray-900 -translate-y-px shadow-[0px_4px_0px_#a855f7]'
                     : 'bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-50 hover:translate-y-[-2px]'
                 }`}
               >
-                ✉️ Undang Worker
+                🤝 Tim & Undang
               </button>
             </div>
 
@@ -2192,15 +2237,48 @@ export default function WorkerDashboard() {
               </div>
             )}
 
-            {/* Tab 4: Undang Worker */}
-            {activeTab === 'invitations' && (
+            {/* Tab 4: Tim & Undang Worker */}
+            {activeTab === 'team' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
-                {/* Left Column: List of invitations */}
-                <div className="lg:col-span-2 space-y-4">
-                  <h3 className="text-lg font-black uppercase flex items-center gap-2">
-                    <span>✉️</span>
-                    <span>Riwayat Undangan Terkirim</span>
-                  </h3>
+                {/* Left Column: My Team & List of invitations */}
+                <div className="lg:col-span-2 space-y-8">
+                  
+                  {/* My Team Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-black uppercase flex items-center gap-2">
+                      <span className="bg-blue-300 w-8 h-8 border-[3px] border-gray-900 rounded-lg flex items-center justify-center text-sm shadow-[2px_2px_0_#111827]">👥</span>
+                      <span>Tim Saya</span>
+                    </h3>
+                    <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 shadow-[6px_6px_0px_#111827] overflow-hidden relative">
+                      <div className="absolute top-0 right-0 bg-[#ffc900] px-4 py-1.5 border-l-[3px] border-b-[3px] border-gray-900 rounded-bl-xl font-black text-[10px] uppercase tracking-wider">
+                        {teamMembers.length} Anggota
+                      </div>
+                      <div className="space-y-3 pt-6">
+                        {teamMembers.map((member, idx) => (
+                          <div key={member.id} className="flex items-center justify-between p-3 border-2 border-gray-900 rounded-xl bg-gray-50 hover:bg-white hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#111827] transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gray-200 border-2 border-gray-900 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                                <span className="font-black text-gray-500 uppercase">{member.nama_lengkap.charAt(0)}</span>
+                              </div>
+                              <div>
+                                <p className="font-black text-sm uppercase text-gray-900">{member.nama_lengkap} {member.id === profile?.id && '(Anda)'}</p>
+                                <p className="text-[10px] font-bold text-gray-500">Bergabung: {new Date(member.joined_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 font-black text-[10px] uppercase border-2 border-gray-900 rounded-lg ${member.role === 'Ketua Tim' ? 'bg-[#ff90e8] shadow-[2px_2px_0_#111827]' : 'bg-white'}`}>
+                              {member.role}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-black uppercase flex items-center gap-2">
+                      <span className="bg-[#ffc900] w-8 h-8 border-[3px] border-gray-900 rounded-lg flex items-center justify-center text-sm shadow-[2px_2px_0_#111827]">✉️</span>
+                      <span>Riwayat Undangan Terkirim</span>
+                    </h3>
 
                   {invitationLoading ? (
                     <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-10 text-center shadow-[4px_4px_0_#111827] flex flex-col items-center justify-center">
@@ -2263,9 +2341,40 @@ export default function WorkerDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* Right Column: Generate invite code form */}
-                <div className="lg:col-span-1">
+                {/* Right Column: Join team & Generate invite code form */}
+                <div className="lg:col-span-1 space-y-6">
+                  {/* Gabung Tim Card */}
+                  <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 sm:p-6 shadow-[6px_6px_0px_#111827] relative space-y-4">
+                    <h3 className="text-md font-black uppercase pb-2.5 border-b-2 border-gray-100 flex items-center gap-2">
+                      <span className="bg-cyan-300 w-6 h-6 border-2 border-gray-900 rounded flex items-center justify-center text-xs shadow-[1.5px_1.5px_0_#111827] font-black">🤝</span>
+                      Gabung Tim
+                    </h3>
+                    
+                    <form onSubmit={handleJoinTeam} className="space-y-4">
+                      <div>
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Kode Undangan Tim</label>
+                        <input
+                          type="text"
+                          placeholder="Masukkan kode..."
+                          value={joinCode}
+                          onChange={e => setJoinCode(e.target.value)}
+                          className="w-full border-[3px] border-gray-900 rounded-xl px-3.5 py-2.5 text-xs font-bold bg-white focus:bg-white focus:outline-none focus:shadow-[3px_3px_0px_#67e8f9] transition-all"
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isJoiningTeam}
+                        className="w-full bg-cyan-300 border-[3px] border-gray-900 py-3.5 font-black uppercase shadow-[3px_3px_0px_#111827] text-xs hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0px_#111827] active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center gap-1.5 tracking-wider disabled:opacity-50"
+                      >
+                        {isJoiningTeam ? 'Memproses...' : 'Gabung Sekarang'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Buat Undangan Card */}
                   <div className="bg-white border-[3px] border-gray-900 rounded-2xl p-5 sm:p-6 shadow-[6px_6px_0px_#111827] relative space-y-5">
                     <h3 className="text-md font-black uppercase pb-2.5 border-b-2 border-gray-100 flex items-center gap-2">
                       <span className="bg-purple-300 w-6 h-6 border-2 border-gray-900 rounded flex items-center justify-center text-xs shadow-[1.5px_1.5px_0_#111827] font-black">＋</span>
