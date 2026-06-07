@@ -106,8 +106,8 @@ export default function OrderDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
+        <main className="flex-1 flex items-center justify-center py-12">
+          <div className="w-16 h-16 border-[6px] border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
         </main>
         <Footer />
       </div>
@@ -227,10 +227,10 @@ export default function OrderDetailPage() {
                     className="w-full resize-none border-2 border-gray-900 rounded-xl p-4 font-bold text-sm text-gray-900 focus:outline-none focus:border-red-500 transition-all shadow-[3px_3px_0_#111827] bg-white mb-4"
                   />
                   <div className="flex gap-3">
-                    <button onClick={handleDispute} disabled={processing || !catatanDispute} className="px-5 py-2.5 bg-red-600 text-white font-black text-sm rounded-lg border-2 border-gray-900 shadow-[3px_3px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all disabled:opacity-50">
+                    <button onClick={handleDispute} disabled={processing || !catatanDispute} className="px-5 py-2.5 bg-red-600 text-white font-black text-sm uppercase tracking-wider rounded-lg border-[3px] border-gray-900 shadow-[3px_3px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all disabled:opacity-50">
                       Kirim Komplain
                     </button>
-                    <button onClick={() => setShowDisputeForm(false)} className="px-5 py-2.5 bg-white text-gray-900 font-black text-sm rounded-lg border-2 border-gray-900 shadow-[3px_3px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
+                    <button onClick={() => setShowDisputeForm(false)} className="px-5 py-2.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider rounded-lg border-[3px] border-gray-900 shadow-[3px_3px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
                       Batal
                     </button>
                   </div>
@@ -272,7 +272,7 @@ export default function OrderDetailPage() {
 
                 {/* Action Buttons */}
                 {(s(order.status) === 'waiting_payment' || s(order.status) === 'pending') && (order.payment_url || order.xendit_invoice_url || order.invoice_url) && (
-                  <a href={order.payment_url || order.xendit_invoice_url || order.invoice_url} rel="noopener noreferrer" className="w-full block text-center py-3 bg-yellow-400 text-gray-900 font-black uppercase tracking-wider text-sm rounded-xl border-2 border-gray-900 shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
+                  <a href={order.payment_url || order.xendit_invoice_url || order.invoice_url} rel="noopener noreferrer" className="w-full block text-center py-3 bg-yellow-400 text-gray-900 font-black uppercase tracking-wider text-sm rounded-xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
                     Bayar Sekarang
                   </a>
                 )}
@@ -286,10 +286,10 @@ export default function OrderDetailPage() {
 
                 {s(order.status) === 'delivered' && !showDisputeForm && (
                   <div className="space-y-3">
-                    <button onClick={handleConfirm} disabled={processing} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-wider text-sm rounded-xl border-2 border-gray-900 shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all disabled:opacity-50">
+                    <button onClick={handleConfirm} disabled={processing} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-wider text-sm rounded-xl border-[3px] border-gray-900 shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px] transition-all disabled:opacity-50">
                       Konfirmasi Akun Diterima
                     </button>
-                    <button onClick={() => setShowDisputeForm(true)} className="w-full py-3 bg-white hover:bg-red-50 text-red-600 font-black uppercase tracking-wider text-sm rounded-xl border-2 border-red-300 shadow-[3px_3px_0_#fecaca] hover:shadow-[1px_1px_0_#fecaca] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
+                    <button onClick={() => setShowDisputeForm(true)} className="w-full py-3 bg-white hover:bg-red-50 text-red-600 font-black uppercase tracking-wider text-sm rounded-xl border-[3px] border-red-300 shadow-[3px_3px_0_#fecaca] hover:shadow-[1px_1px_0_#fecaca] hover:translate-y-[2px] hover:translate-x-[2px] transition-all">
                       Ada Masalah? Dispute
                     </button>
                     <p className="text-[11px] font-bold text-gray-400 text-center">Auto-konfirmasi dalam 3 hari jika tidak ada respons.</p>

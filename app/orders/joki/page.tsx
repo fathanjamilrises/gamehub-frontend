@@ -95,18 +95,42 @@ export default function OrdersJokiPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
+      {/* Navbar */}
+      <nav className="bg-white border-b-2 border-gray-900 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-600 border-2 border-gray-900 rounded-md flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">G</span>
+                </div>
+                <span className="font-bold text-gray-900 text-lg hidden sm:block">GameHub.ID</span>
+              </Link>
+              <span className="text-gray-300">|</span>
+              <h1 className="text-xl font-black text-gray-900 uppercase">Pesanan Saya</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-2 text-sm text-gray-700 font-medium hover:text-blue-600 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span className="hidden sm:block">Beranda</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Category Tabs */}
-        <div className="flex gap-0 mb-6 border-2 border-gray-900 rounded-lg overflow-hidden w-fit">
-          <Link href="/orders" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
+        <div className="flex gap-0 mb-8 border-[3px] border-gray-900 rounded-xl overflow-hidden w-fit shadow-[4px_4px_0_#111827] bg-white">
+          <Link href="/orders" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors border-r-[3px] border-gray-900">
             Top Up / Voucher
           </Link>
-          <Link href="/orders/akun" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
+          <Link href="/orders/akun" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors border-r-[3px] border-gray-900">
             Beli Akun
           </Link>
-          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm">
+          <button className="px-8 py-3.5 bg-blue-600 text-white font-black text-sm uppercase tracking-wider hover:bg-blue-700 transition-colors">
             Jasa Joki
           </button>
         </div>
@@ -114,66 +138,78 @@ export default function OrdersJokiPage() {
         {/* Orders List */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
+            <div className="w-16 h-16 border-[6px] border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-lg border-2 border-gray-900 p-12 text-center" style={{ boxShadow: '4px 4px 0 #1e293b' }}>
-            <h3 className="text-lg font-black uppercase text-gray-900 mb-2">Belum Ada Order Joki</h3>
-            <p className="text-gray-500 mb-6 font-bold">Kamu belum pernah memesan jasa joki.</p>
-            <Link href="/joki" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md border-2 border-gray-900 hover:bg-blue-700 transition-all font-bold uppercase shadow-[3px_3px_0px_#111827]">
+          <div className="bg-white rounded-xl border-[3px] border-gray-900 p-16 text-center shadow-[8px_8px_0_#111827]">
+            <div className="w-28 h-28 bg-blue-100 border-[3px] border-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[4px_4px_0_#111827] -rotate-3">
+              <svg className="w-14 h-14 text-blue-600" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 uppercase tracking-wide mb-3">Belum Ada Order Joki</h3>
+            <p className="text-gray-500 font-bold mb-8">Kamu belum pernah memesan jasa joki.</p>
+            <Link
+              href="/joki"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-xl border-[3px] border-gray-900 hover:bg-blue-700 transition-all font-black uppercase tracking-wider shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px]"
+            >
               Pesan Jasa Joki
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {orders.map((order) => (
-              <div key={order.id} className="bg-white rounded-lg border-2 border-gray-900 overflow-hidden transition-all hover:-translate-y-0.5" style={{ boxShadow: '4px 4px 0 #1e293b' }}>
-                <div className="p-4 sm:p-6">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div key={order.id} className="bg-white rounded-xl border-[3px] border-gray-900 overflow-hidden shadow-[6px_6px_0_#111827] transition-all hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0_#111827]">
+                <div className="p-5 sm:p-7">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-5 border-b-[3px] border-dashed border-gray-200">
                     <div>
-                      <p className="text-sm font-black text-gray-900 mb-1 uppercase">ORDER {order.invoice_number}</p>
-                      <p className="text-sm font-bold text-gray-500">{order.created_at ? new Date(order.created_at).toLocaleString() : '-'}</p>
+                      <p className="text-lg font-black text-gray-900 uppercase tracking-widest">ORDER {order.invoice_number}</p>
+                      <p className="text-sm font-bold text-gray-500 mt-1">{(order as any).createdAt || order.created_at ? new Date((order as any).createdAt || order.created_at!).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(order.status)}
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-4 border-t-2 border-gray-200 pt-4">
-                    <div className="flex-1">
-                      <h3 className="font-black uppercase text-gray-900 text-lg mb-1">{order.nama_games}</h3>
-                      <p className="font-bold text-sm text-gray-600">Username/Email: <span className="text-blue-600">{order.game_username || order.game_email || '-'}</span></p>
-                      <p className="font-bold text-sm text-gray-600">Progress: <span className="uppercase">{order.rank_saat_ini} ➡️ {order.rank_target}</span></p>
+                  <div className="flex flex-col sm:flex-row gap-5">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-black text-gray-900 text-xl uppercase truncate">{order.nama_games}</h3>
+                      <p className="text-sm font-bold text-gray-600 mt-3 bg-gray-50 p-2 rounded-lg border-2 border-gray-200 inline-block">
+                        Username/Email: <span className="text-blue-600">{order.game_username || order.game_email || '-'}</span>
+                      </p>
+                      <p className="text-sm font-bold text-gray-600 mt-2">Progress: <span className="uppercase text-gray-900">{order.rank_saat_ini} ➡️ {order.rank_target}</span></p>
                     </div>
-                    <div className="text-left sm:text-right flex flex-col items-start sm:items-end gap-2">
-                      <p className="font-black text-gray-900 text-xl text-blue-600">Rp {order.harga.toLocaleString('id-ID')}</p>
+                    <div className="sm:text-right flex flex-col sm:items-end justify-center gap-2 mt-4 sm:mt-0">
+                      <p className="font-black text-2xl text-blue-600 drop-shadow-[1px_1px_0_rgba(0,0,0,0.1)]">Rp {order.harga.toLocaleString('id-ID')}</p>
                       
-                      {(order.status === 'waiting_payment' || order.status === 'pending') && order.invoice_url && (
-                        <a href={order.invoice_url} className="bg-[#ffc900] border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]">Bayar Sekarang</a>
-                      )}
+                      <div className="flex gap-2 mt-2">
+                        {(order.status === 'waiting_payment' || order.status === 'pending') && order.invoice_url && (
+                          <a href={order.invoice_url} className="px-4 py-2 bg-yellow-400 text-gray-900 rounded-lg border-[3px] border-gray-900 text-sm font-black uppercase tracking-wider hover:bg-yellow-500 transition-colors shadow-[2px_2px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[1px] hover:translate-x-[1px]">Bayar Sekarang</a>
+                        )}
 
-                      {order.status === 'done' && (
-                        <button 
-                          onClick={() => {
-                            setActionModalConfig({
-                              title: 'Konfirmasi Selesai',
-                              description: 'Apakah pesanan joki ini benar-benar sudah selesai dan sesuai harapan?',
-                              confirmText: 'Ya, Konfirmasi',
-                              confirmColor: 'bg-green-400',
-                              onConfirm: () => handleConfirmDone(order.id)
-                            })
-                            setActionModalOpen(true)
-                          }} 
-                          className="bg-green-400 border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]"
-                        >
-                          Konfirmasi Selesai
-                        </button>
-                      )}
-                      {order.room_chat_id && (
-                        <Link href={`/chat/${order.room_chat_id}`} className="bg-blue-200 text-blue-900 border-2 border-gray-900 px-4 py-2 font-black text-xs uppercase shadow-[2px_2px_0px_#111827]">
-                          Chat Worker
-                        </Link>
-                      )}
+                        {order.status === 'done' && (
+                          <button 
+                            onClick={() => {
+                              setActionModalConfig({
+                                title: 'Konfirmasi Selesai',
+                                description: 'Apakah pesanan joki ini benar-benar sudah selesai dan sesuai harapan?',
+                                confirmText: 'Ya, Konfirmasi',
+                                confirmColor: 'bg-green-400',
+                                onConfirm: () => handleConfirmDone(order.id)
+                              })
+                              setActionModalOpen(true)
+                            }} 
+                            className="px-4 py-2 bg-green-400 text-gray-900 rounded-lg border-[3px] border-gray-900 text-sm font-black uppercase tracking-wider hover:bg-green-500 transition-colors shadow-[2px_2px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[1px] hover:translate-x-[1px]"
+                          >
+                            Konfirmasi Selesai
+                          </button>
+                        )}
+                        {order.room_chat_id && (
+                          <Link href={`/chat/${order.room_chat_id}`} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border-[3px] border-blue-800 text-sm font-black uppercase tracking-wider hover:bg-blue-200 transition-colors shadow-[2px_2px_0_#1e40af] hover:shadow-[1px_1px_0_#1e40af] hover:translate-y-[1px] hover:translate-x-[1px]">
+                            Chat Worker
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </div>
 

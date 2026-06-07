@@ -78,7 +78,7 @@ export default function OrdersAkunPage() {
                 <span className="font-bold text-gray-900 text-lg hidden sm:block">GameHub.ID</span>
               </Link>
               <span className="text-gray-300">|</span>
-              <h1 className="text-lg font-bold text-gray-900">Pesanan Saya</h1>
+              <h1 className="text-xl font-black text-gray-900 uppercase">Pesanan Saya</h1>
             </div>
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-2 text-sm text-gray-700 font-medium hover:text-blue-600 transition-colors">
@@ -94,14 +94,14 @@ export default function OrdersAkunPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Category Tabs */}
-        <div className="flex gap-0 mb-6 border-2 border-gray-900 rounded-lg overflow-hidden w-fit">
-          <Link href="/orders" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
+        <div className="flex gap-0 mb-8 border-[3px] border-gray-900 rounded-xl overflow-hidden w-fit shadow-[4px_4px_0_#111827] bg-white">
+          <Link href="/orders" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors border-r-[3px] border-gray-900">
             Top Up / Voucher
           </Link>
-          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm border-r-2 border-gray-900">
+          <button className="px-8 py-3.5 bg-blue-600 text-white font-black text-sm uppercase tracking-wider border-r-[3px] border-gray-900 hover:bg-blue-700 transition-colors">
             Beli Akun
           </button>
-          <Link href="/orders/joki" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+          <Link href="/orders/joki" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors">
             Jasa Joki
           </Link>
         </div>
@@ -109,31 +109,34 @@ export default function OrdersAkunPage() {
         {/* Orders List */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
+            <div className="w-16 h-16 border-[6px] border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-lg border-2 border-gray-900 p-12 text-center" style={{ boxShadow: '4px 4px 0 #1e293b' }}>
-            <div className="w-24 h-24 bg-blue-50 border-2 border-gray-900 rounded-md flex items-center justify-center mx-auto mb-4">
-              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 11h14a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2z" />
+          <div className="bg-white rounded-xl border-[3px] border-gray-900 p-16 text-center shadow-[8px_8px_0_#111827]">
+            <div className="w-28 h-28 bg-blue-100 border-[3px] border-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[4px_4px_0_#111827] -rotate-3">
+              <svg className="w-14 h-14 text-blue-600" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 11h14a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2z" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Pesanan Akun</h3>
-            <p className="text-gray-500 mb-6">Kamu belum pernah melakukan pembelian akun game.</p>
-            <Link href="/accounts" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md border-2 border-gray-900 hover:bg-blue-700 transition-all font-bold">
+            <h3 className="text-2xl font-black text-gray-900 uppercase tracking-wide mb-3">Belum Ada Pesanan Akun</h3>
+            <p className="text-gray-500 font-bold mb-8">Kamu belum pernah melakukan pembelian akun game.</p>
+            <Link
+              href="/accounts"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-xl border-[3px] border-gray-900 hover:bg-blue-700 transition-all font-black uppercase tracking-wider shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px]"
+            >
               Jelajahi Akun
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {orders.map((order: any) => (
-              <div key={order.id} className="bg-white rounded-lg border-2 border-gray-900 overflow-hidden transition-all hover:-translate-y-0.5" style={{ boxShadow: '4px 4px 0 #1e293b' }}>
-                <div className="p-4 sm:p-6">
+              <div key={order.id} className="bg-white rounded-xl border-[3px] border-gray-900 overflow-hidden shadow-[6px_6px_0_#111827] transition-all hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0_#111827]">
+                <div className="p-5 sm:p-7">
                   {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-5 border-b-[3px] border-dashed border-gray-200">
                     <div>
-                      <p className="text-sm font-bold text-gray-900 mb-1">#{order.invoice_number || `ORD-${order.id}`}</p>
-                      <p className="text-sm text-gray-500">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                      <p className="text-lg font-black text-gray-900 uppercase tracking-widest">#{order.invoice_number || `ORD-${order.id}`}</p>
+                      <p className="text-sm font-bold text-gray-500 mt-1">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(order.status)}
@@ -141,28 +144,28 @@ export default function OrdersAkunPage() {
                   </div>
 
                   {/* Content */}
-                  <div className="flex gap-4">
-                    <div className="w-16 h-16 rounded-md border-2 border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                  <div className="flex flex-col sm:flex-row gap-5">
+                    <div className="w-20 h-20 rounded-xl border-[3px] border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center shadow-[3px_3px_0_#111827]">
                       {order.listing?.accountGame?.gambar_game ? (
                         <img src={resolveImageUrl(order.listing.accountGame.gambar_game)} className="w-full h-full object-cover" alt="" />
                       ) : (
-                        <span className="text-2xl font-bold text-gray-300">A</span>
+                        <span className="text-3xl font-black text-gray-400">A</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 truncate">{order.listing?.nama_post || 'Akun Game'}</h3>
-                      <p className="text-sm text-gray-500 mt-1">Game: {order.listing?.accountGame?.nama_game || '-'}</p>
-                      <p className="text-sm text-gray-500">Penjual: {order.listing?.reseller?.store_name || 'Toko'}</p>
+                      <h3 className="font-black text-gray-900 text-xl uppercase truncate">{order.listing?.nama_post || 'Akun Game'}</h3>
+                      <p className="text-sm font-bold text-gray-600 mt-2 bg-gray-50 p-2 rounded-lg border-2 border-gray-200 inline-block">Game: {order.listing?.accountGame?.nama_game || '-'}</p>
+                      <p className="text-sm font-bold text-gray-500 mt-2">Penjual: {order.listing?.reseller?.store_name || 'Toko'}</p>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-2">
-                      <p className="font-bold text-gray-900">Rp {Number(order.total_bayar || order.harga || 0).toLocaleString('id-ID')}</p>
-                      <div className="flex gap-2">
+                    <div className="sm:text-right flex flex-col sm:items-end justify-center gap-2 mt-4 sm:mt-0">
+                      <p className="font-black text-2xl text-blue-600 drop-shadow-[1px_1px_0_rgba(0,0,0,0.1)]">Rp {Number(order.total_bayar || order.harga || 0).toLocaleString('id-ID')}</p>
+                      <div className="flex gap-2 mt-2">
                         {(s(order.status) === 'waiting_payment' || s(order.status) === 'pending') && (order.payment_url || order.xendit_invoice_url || order.invoice_url) && (
-                          <a href={order.payment_url || order.xendit_invoice_url || order.invoice_url} rel="noopener noreferrer" className="px-3 py-1.5 bg-yellow-300 text-gray-900 rounded-md border-2 border-gray-900 text-xs font-bold hover:bg-yellow-400 transition-colors">
+                          <a href={order.payment_url || order.xendit_invoice_url || order.invoice_url} rel="noopener noreferrer" className="px-4 py-2 bg-yellow-400 text-gray-900 rounded-lg border-[3px] border-gray-900 text-sm font-black uppercase tracking-wider hover:bg-yellow-500 transition-colors shadow-[2px_2px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[1px] hover:translate-x-[1px]">
                             Bayar
                           </a>
                         )}
-                        <Link href={`/my-orders/${order.id}`} className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md border-2 border-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors">
+                        <Link href={`/my-orders/${order.id}`} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border-[3px] border-blue-800 text-sm font-black uppercase tracking-wider hover:bg-blue-200 transition-colors shadow-[2px_2px_0_#1e40af] hover:shadow-[1px_1px_0_#1e40af] hover:translate-y-[1px] hover:translate-x-[1px]">
                           Detail
                         </Link>
                       </div>

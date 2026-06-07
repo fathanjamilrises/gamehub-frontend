@@ -203,7 +203,7 @@ export default function OrdersPage() {
                 <span className="font-bold text-gray-900 text-lg hidden sm:block">GameHub.ID</span>
               </Link>
               <span className="text-gray-300">|</span>
-              <h1 className="text-lg font-bold text-gray-900">Riwayat Pesanan</h1>
+              <h1 className="text-xl font-black text-gray-900 uppercase">Pesanan Saya</h1>
             </div>
             <div className="flex items-center gap-4">
               <Link
@@ -231,23 +231,23 @@ export default function OrdersPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Category Tabs */}
-        <div className="flex gap-0 mb-6 border-2 border-gray-900 rounded-lg overflow-hidden w-fit">
-          <button className="px-6 py-3 bg-blue-600 text-white font-bold text-sm border-r-2 border-gray-900">
+        <div className="flex gap-0 mb-8 border-[3px] border-gray-900 rounded-xl overflow-hidden w-fit shadow-[4px_4px_0_#111827] bg-white">
+          <button className="px-8 py-3.5 bg-blue-600 text-white font-black text-sm uppercase tracking-wider border-r-[3px] border-gray-900 hover:bg-blue-700 transition-colors">
             Top Up / Voucher
           </button>
-          <Link href="/orders/akun" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors border-r-2 border-gray-900">
+          <Link href="/orders/akun" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors border-r-[3px] border-gray-900">
             Beli Akun
           </Link>
-          <Link href="/orders/joki" className="px-6 py-3 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors">
+          <Link href="/orders/joki" className="px-8 py-3.5 bg-white text-gray-900 font-black text-sm uppercase tracking-wider hover:bg-blue-50 transition-colors">
             Jasa Joki
           </Link>
         </div>
 
         {/* Filter & Search */}
-        <div className="bg-white rounded-lg border-2 border-gray-900 p-4 mb-6 nb-shadow">
+        <div className="bg-white rounded-xl border-[3px] border-gray-900 p-5 mb-8 shadow-[6px_6px_0_#111827]">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Status Filter */}
-            <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+            <div className="flex gap-3 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
               {[
                 { value: 'all', label: 'Semua' },
                 { value: 'completed', label: 'Selesai' },
@@ -258,10 +258,10 @@ export default function OrdersPage() {
                 <button
                   key={filter.value}
                   onClick={() => setFilterStatus(filter.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-bold whitespace-nowrap transition-all border-2 border-gray-900 ${
+                  className={`px-5 py-2.5 rounded-lg text-sm font-black uppercase tracking-wider whitespace-nowrap transition-all border-[3px] border-gray-900 ${
                     filterStatus === filter.value
-                      ? 'bg-blue-600 text-white nb-shadow-sm'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                      ? 'bg-blue-600 text-white shadow-[3px_3px_0_#111827] translate-x-[-2px] translate-y-[-2px]'
+                      : 'bg-white text-gray-900 hover:bg-gray-50 hover:shadow-[3px_3px_0_#111827] hover:translate-x-[-2px] hover:translate-y-[-2px]'
                   }`}
                 >
                   {filter.label}
@@ -270,20 +270,20 @@ export default function OrdersPage() {
             </div>
 
             {/* Search */}
-            <form onSubmit={handleSearch} className="flex gap-2 sm:ml-auto">
+            <form onSubmit={handleSearch} className="flex gap-3 sm:ml-auto">
               <input
                 type="text"
-                placeholder="Cari kode pesanan atau game..."
+                placeholder="Cari pesanan..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 sm:w-64 px-4 py-2 border-2 border-gray-900 rounded-lg text-sm focus:outline-none focus:ring-0 focus:shadow-[3px_3px_0px_#2563eb]"
+                className="flex-1 sm:w-64 px-4 py-2 border-[3px] border-gray-900 rounded-lg text-sm font-bold text-gray-900 focus:outline-none focus:ring-0 shadow-[3px_3px_0_#111827] bg-white placeholder-gray-400"
               />
               <button
                 type="submit"
-                className="px-4 py-2 bg-white text-gray-900 rounded-lg border-2 border-gray-900 hover:bg-gray-50 transition-colors nb-shadow-sm"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg border-[3px] border-gray-900 hover:bg-blue-700 transition-colors shadow-[3px_3px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px]"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
             </form>
@@ -293,117 +293,119 @@ export default function OrdersPage() {
         {/* Orders List */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent" />
+            <div className="w-16 h-16 border-[6px] border-gray-900 border-t-blue-600 rounded-full animate-spin shadow-[4px_4px_0_#111827]" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-lg border-2 border-gray-900 p-12 text-center nb-shadow">
-            <div className="w-24 h-24 bg-blue-50 border-2 border-gray-900 rounded-md flex items-center justify-center mx-auto mb-4">
-              <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          <div className="bg-white rounded-xl border-[3px] border-gray-900 p-16 text-center shadow-[8px_8px_0_#111827]">
+            <div className="w-28 h-28 bg-blue-100 border-[3px] border-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-[4px_4px_0_#111827] -rotate-3">
+              <svg className="w-14 h-14 text-blue-600" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 11h14a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2z" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Pesanan</h3>
-            <p className="text-gray-500 mb-6">Yuk mulai top up game favoritmu!</p>
+            <h3 className="text-2xl font-black text-gray-900 uppercase tracking-wide mb-3">Belum Ada Pesanan</h3>
+            <p className="text-gray-500 font-bold mb-8">Yuk mulai top up game favoritmu dan jadi juara!</p>
             <Link
               href="/topup"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md border-2 border-gray-900 hover:bg-blue-700 transition-all font-bold nb-shadow-sm hover:-translate-y-px"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-xl border-[3px] border-gray-900 hover:bg-blue-700 transition-all font-black uppercase tracking-wider shadow-[4px_4px_0_#111827] hover:shadow-[2px_2px_0_#111827] hover:translate-y-[2px] hover:translate-x-[2px]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               Mulai Top Up
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {orders.map((order) => (
               <div
                 key={order.id}
-                className="bg-white rounded-lg border-2 border-gray-900 overflow-hidden nb-shadow transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1e293b]"
+                className="bg-white rounded-xl border-[3px] border-gray-900 overflow-hidden shadow-[6px_6px_0_#111827] transition-all hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0_#111827]"
               >
-                <div className="p-4 sm:p-6">
+                <div className="p-5 sm:p-7">
                   {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-5 border-b-[3px] border-dashed border-gray-200">
                     <div>
-                      <p className="text-sm font-bold text-gray-900 mb-1">{order.orderCode}</p>
-                      <p className="text-sm text-gray-500">{formatDate(order.date)}</p>
+                      <p className="text-lg font-black text-gray-900 uppercase tracking-widest">{order.orderCode}</p>
+                      <p className="text-sm font-bold text-gray-500 mt-1">{formatDate(order.date)}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(order.status)}
                       {(order.status === 'pending' || order.status === 'pending_payment') && (
                         <button
                           onClick={() => checkPaymentStatus(order.orderCode)}
-                          className="px-4 py-2 bg-yellow-300 text-gray-900 rounded-md border-2 border-gray-900 text-sm font-bold hover:bg-yellow-400 transition-colors"
+                          className="px-4 py-2 bg-yellow-400 text-gray-900 rounded-lg border-[3px] border-gray-900 text-sm font-black uppercase tracking-wider hover:bg-yellow-500 transition-colors shadow-[2px_2px_0_#111827] hover:shadow-[1px_1px_0_#111827] hover:translate-y-[1px] hover:translate-x-[1px]"
                         >
                           Cek Status
                         </button>
                       )}
                       <button
                         onClick={() => viewReceipt(order)}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-md border-2 border-blue-600 text-sm font-bold hover:bg-blue-100 transition-colors"
+                        className="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border-[3px] border-blue-800 text-sm font-black uppercase tracking-wider hover:bg-blue-200 transition-colors shadow-[2px_2px_0_#1e40af] hover:shadow-[1px_1px_0_#1e40af] hover:translate-y-[1px] hover:translate-x-[1px]"
                       >
-                        Lihat Nota
+                        Nota
                       </button>
                     </div>
                   </div>
 
                   {/* Processing progress bar */}
                   {order.status === 'processing' && (
-                    <div className="mb-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <div className="mb-5 bg-blue-50 border-[3px] border-blue-200 p-4 rounded-xl">
+                      <div className="flex items-center gap-3 mb-2">
+                        <svg className="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
                           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
-                        <span className="text-xs text-blue-600 font-bold">Sedang diproses... Diamond akan masuk dalam beberapa detik</span>
+                        <span className="text-sm text-blue-800 font-black uppercase tracking-wider">Sedang diproses... Diamond segera masuk</span>
                       </div>
-                      <div className="h-2 bg-gray-100 border border-gray-900 rounded-md overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-md animate-pulse" style={{ width: '70%' }} />
+                      <div className="h-3 bg-white border-[3px] border-gray-900 rounded-full overflow-hidden shadow-[inset_2px_2px_0_rgba(0,0,0,0.1)]">
+                        <div className="h-full bg-blue-500 animate-pulse" style={{ width: '70%' }} />
                       </div>
                     </div>
                   )}
 
                   {/* Content */}
-                  <div className="flex gap-4">
-                    <div className="w-16 h-16 rounded-md border-2 border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                  <div className="flex flex-col sm:flex-row gap-5">
+                    <div className="w-20 h-20 rounded-xl border-[3px] border-gray-900 overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center shadow-[3px_3px_0_#111827]">
                       {hasOrderImage(order.game.image) ? (
                         <Image
                           src={order.game.image}
                           alt={order.game.name}
-                          width={64}
-                          height={64}
+                          width={80}
+                          height={80}
                           className="w-full h-full object-cover"
                           unoptimized
                         />
                       ) : (
-                        <span className="text-2xl font-bold text-gray-300">
+                        <span className="text-3xl font-black text-gray-400">
                           {order.game.name.charAt(0)}
                         </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 truncate">{order.game.name}</h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-900 text-sm font-medium">
+                      <h3 className="font-black text-gray-900 text-xl uppercase truncate">{order.game.name}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg border-2 border-blue-800 text-xs font-black uppercase">
                           {order.item.name}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="text-sm font-bold text-gray-600 mt-3 bg-gray-50 p-2 rounded-lg border-2 border-gray-200 inline-block">
                         ID: {order.playerId}
                         {order.serverId && ` | Server: ${order.serverId}`}
                         {order.nickname && ` · ${order.nickname}`}
                       </p>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-1">
-                      <p className="font-bold text-gray-900">{formatRupiah(order.payment.total)}</p>
-                      <p className="text-sm text-gray-500">{order.payment.method}</p>
+                    <div className="sm:text-right flex flex-col sm:items-end justify-center gap-2 mt-4 sm:mt-0">
+                      <p className="font-black text-2xl text-blue-600 drop-shadow-[1px_1px_0_rgba(0,0,0,0.1)]">{formatRupiah(order.payment.total)}</p>
+                      <span className="inline-block px-3 py-1 bg-gray-100 border-2 border-gray-900 rounded-md text-xs font-black uppercase text-gray-700">
+                        {order.payment.method}
+                      </span>
                       {order.xenditInvoiceUrl && order.status !== 'completed' && (
                         <a
                           href={order.xenditInvoiceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 font-bold hover:underline"
+                          className="mt-2 text-xs text-blue-700 font-black uppercase tracking-wider hover:underline"
                         >
-                          Bayar →
+                          Lanjutkan Pembayaran →
                         </a>
                       )}
                     </div>
